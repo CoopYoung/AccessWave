@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Error - AccessWave</title>
+    <meta name="description" content="Something went wrong on our end. Please try again shortly.">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <div class="links">
+            <a href="/login">Log in</a>
+            <a href="/register" class="btn btn-primary btn-sm">Start Free</a>
+        </div>
+    </div></nav>
+
+    <main class="error-page" id="main-content">
+        <div class="error-page-inner">
+            <div class="error-code error-code-500" aria-hidden="true">500</div>
+            <h1>Something went wrong</h1>
+            <p>We ran into an unexpected error on our end. Please try again in a moment, or head back to the home page.</p>
+            <div class="error-actions">
+                <a href="/" class="btn btn-primary">Go to Home</a>
+                <button class="btn btn-outline" onclick="window.location.reload()">Try Again</button>
+            </div>
+        </div>
+    </main>
+
+    <footer><div class="container"><p>AccessWave &mdash; Making the web accessible, one scan at a time.</p></div></footer>
+</body>
+</html>
