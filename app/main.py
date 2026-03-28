@@ -1,6 +1,6 @@
-import logging
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse
@@ -11,19 +11,22 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.config import settings
 from app.database import init_db
 from app.errors import http_exception_handler, unhandled_exception_handler, validation_exception_handler
 from app.limiter import limiter
 from app.routers import auth_router, billing_router, health_router, scan_router
+from app.logging_config import configure_logging
+from app.routers import auth_router, billing_router, scan_router
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("accesswave")
+configure_logging(log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
+logger = structlog.get_logger("accesswave")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    logger.info("AccessWave started")
+    logger.info("startup_complete", log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
     yield
 
 

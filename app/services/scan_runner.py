@@ -1,8 +1,8 @@
 """Orchestrates a full site scan: crawl -> check each page -> save results."""
 
 import datetime
-import logging
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,7 @@ from app.models import Issue, Scan, Site
 from app.services.crawler import crawl_site
 from app.services.scanner import IssueFound, calculate_score, scan_html
 
-logger = logging.getLogger("accesswave.runner")
+logger = structlog.get_logger("accesswave.runner")
 
 
 async def run_scan(scan_id: int, max_pages: int = 5) -> None:
@@ -30,6 +30,8 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
         scan.status = "running"
         scan.started_at = datetime.datetime.utcnow()
         await db.commit()
+
+        logger.info("scan_started", scan_id=scan.id, site_id=scan.site_id, site_url=site.url, max_pages=max_pages)
 
         try:
             pages = await crawl_site(site.url, max_pages=max_pages)
@@ -64,10 +66,21 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
             scan.status = "completed"
             scan.completed_at = datetime.datetime.utcnow()
 
-            logger.info(f"Scan {scan.id} complete: {scan.pages_scanned} pages, {scan.total_issues} issues, score {scan.score}")
+            logger.info(
+                "scan_complete",
+                scan_id=scan.id,
+                site_id=scan.site_id,
+                pages_scanned=scan.pages_scanned,
+                total_issues=scan.total_issues,
+                critical=scan.critical_count,
+                serious=scan.serious_count,
+                moderate=scan.moderate_count,
+                minor=scan.minor_count,
+                score=scan.score,
+            )
 
         except Exception as e:
-            logger.error(f"Scan {scan.id} failed: {e}")
+            logger.error("scan_failed", scan_id=scan.id, site_id=scan.site_id, error=str(e), exc_info=True)
             scan.status = "failed"
             scan.completed_at = datetime.datetime.utcnow()
 

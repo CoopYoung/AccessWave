@@ -1,3 +1,4 @@
+import structlog
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from app.database import get_db
 from app.models import User
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
+logger = structlog.get_logger("accesswave.billing")
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
@@ -45,6 +47,7 @@ async def create_checkout(
         cancel_url=f"{settings.BASE_URL}/dashboard",
         metadata={"user_id": str(user.id), "plan": plan},
     )
+    logger.info("checkout_created", user_id=user.id, plan=plan, session_id=session.id)
     return CheckoutResponse(checkout_url=session.url)
 
 
@@ -55,7 +58,9 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         event = stripe.Webhook.construct_event(payload, sig, settings.STRIPE_WEBHOOK_SECRET)
     except (ValueError, stripe.error.SignatureVerificationError):
+        logger.warning("webhook_invalid_signature")
         raise HTTPException(status_code=400, detail="Invalid webhook")
+    logger.info("webhook_received", event_type=event["type"], event_id=event["id"])
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = int(session["metadata"]["user_id"])
@@ -66,6 +71,7 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             user.plan = plan
             user.stripe_subscription_id = session.get("subscription")
             await db.commit()
+            logger.info("plan_upgraded", user_id=user_id, plan=plan)
     elif event["type"] == "customer.subscription.deleted":
         sub_id = event["data"]["object"]["id"]
         result = await db.execute(select(User).where(User.stripe_subscription_id == sub_id))
@@ -74,4 +80,5 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             user.plan = "free"
             user.stripe_subscription_id = None
             await db.commit()
+            logger.info("plan_downgraded", user_id=user.id, subscription_id=sub_id)
     return {"status": "ok"}

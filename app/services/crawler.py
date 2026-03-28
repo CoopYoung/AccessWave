@@ -1,15 +1,15 @@
 """Lightweight async crawler — fetches pages from a site for scanning."""
 
 import asyncio
-import logging
 from urllib.parse import urljoin, urlparse
 
 import httpx
+import structlog
 from bs4 import BeautifulSoup
 
 from app.config import settings
 
-logger = logging.getLogger("accesswave.crawler")
+logger = structlog.get_logger("accesswave.crawler")
 
 
 async def crawl_site(base_url: str, max_pages: int = 5) -> list[dict]:
@@ -42,7 +42,7 @@ async def crawl_site(base_url: str, max_pages: int = 5) -> list[dict]:
 
                 html = resp.text
                 results.append({"url": url, "html": html, "status_code": resp.status_code})
-                logger.info(f"Crawled {url} ({resp.status_code})")
+                logger.info("page_crawled", url=url, status_code=resp.status_code, depth=depth)
 
                 # Extract links for further crawling
                 if depth < settings.MAX_CRAWL_DEPTH:
@@ -62,10 +62,10 @@ async def crawl_site(base_url: str, max_pages: int = 5) -> list[dict]:
                                 queue.append((full_url, depth + 1))
 
             except httpx.TimeoutException:
-                logger.warning(f"Timeout: {url}")
+                logger.warning("page_timeout", url=url, timeout_seconds=settings.SCAN_TIMEOUT)
                 results.append({"url": url, "html": "", "status_code": 0, "error": "timeout"})
             except Exception as e:
-                logger.warning(f"Error crawling {url}: {e}")
+                logger.warning("page_error", url=url, error=str(e))
                 results.append({"url": url, "html": "", "status_code": 0, "error": str(e)[:200]})
 
     return results

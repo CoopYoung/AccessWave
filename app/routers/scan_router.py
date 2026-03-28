@@ -3,6 +3,8 @@ import datetime
 from ipaddress import AddressValueError, ip_address, ip_network
 from typing import Literal
 
+
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl, field_validator
 from sqlalchemy import case, func, select
@@ -16,6 +18,7 @@ from app.models import Issue, Scan, Site, User
 from app.services.scan_runner import run_scan
 
 router = APIRouter(prefix="/api", tags=["scans"])
+logger = structlog.get_logger("accesswave.scan")
 
 # Private / reserved CIDR blocks that must not be scanned (SSRF protection)
 _BLOCKED_NETWORKS = [
@@ -184,6 +187,7 @@ async def create_site(request: Request, body: SiteCreate, user: User = Depends(g
     db.add(site)
     await db.commit()
     await db.refresh(site)
+    logger.info("site_created", user_id=user.id, site_id=site.id, site_url=site.url)
     return SiteOut(id=site.id, name=site.name, url=site.url, created_at=site.created_at)
 
 
@@ -207,6 +211,7 @@ async def update_site(
 @router.delete("/sites/{site_id}", status_code=204)
 async def delete_site(site_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     site = await _get_user_site(site_id, user.id, db)
+    logger.info("site_deleted", user_id=user.id, site_id=site.id, site_url=site.url)
     await db.delete(site)
     await db.commit()
 
@@ -236,6 +241,7 @@ async def start_scan(
     db.add(scan)
     await db.commit()
     await db.refresh(scan)
+    logger.info("scan_queued", user_id=user.id, site_id=site.id, scan_id=scan.id, max_pages=plan["pages_per_scan"])
 
     background_tasks.add_task(_run_scan_task, scan.id, plan["pages_per_scan"])
     return scan
