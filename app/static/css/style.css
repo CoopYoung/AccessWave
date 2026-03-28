@@ -151,8 +151,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .chart-wrap { position: relative; height: 220px; }
 .chart-wrap-sm { height: 240px; }
 
-/* =====================================================
-   Animations & Transitions (Track B #8)
+/* ==============================================   Animations & Transitions (Track B #8)
    All motion animations are gated on prefers-reduced-motion.
    Hover/focus transitions are kept subtle and safe for all.
    ===================================================== */
@@ -362,4 +361,75 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
     .auth-card { padding: 28px 16px; }
     .dash-header h1 { font-size: 1.4rem; }
     .stat-card .value { font-size: 1.25rem; }
+/* === Loading states === */
+@keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position:  800px 0; }
+}
+.sk {
+    background: linear-gradient(90deg, var(--surface-2) 25%, #e2e5ea 50%, var(--surface-2) 75%);
+    background-size: 1600px 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 4px;
+    color: transparent !important;
+    user-select: none;
+    display: block;
+}
+.stat-card .value.sk { height: 28px; width: 55%; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+    vertical-align: -2px;
+    margin-right: 5px;
+}
+
+.scan-progress {
+    background: var(--primary-light);
+    border: 1px solid var(--primary);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.scan-progress .sp-text {
+    font-size: 0.9rem;
+    color: var(--primary);
+    font-weight: 600;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+.scan-progress-track {
+    flex: 1;
+    background: rgba(79, 70, 229, 0.15);
+    border-radius: 100px;
+    height: 6px;
+    overflow: hidden;
+}
+.scan-progress-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 100px;
+    transition: width 0.8s ease;
+}
+.scan-progress .sp-pct {
+    font-size: 0.82rem;
+    color: var(--primary);
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 34px;
+    text-align: right;
+}
+
+@media (max-width: 768px) {
+    .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
 }
