@@ -26,5 +26,11 @@ class Settings:
     SCAN_TIMEOUT: int = 30
     MAX_CRAWL_DEPTH: int = 3
 
+    # Rate limiting (requests per window, e.g. "5/minute")
+    RATE_LIMIT_AUTH_REGISTER: str = os.getenv("RATE_LIMIT_AUTH_REGISTER", "5/minute")
+    RATE_LIMIT_AUTH_LOGIN: str = os.getenv("RATE_LIMIT_AUTH_LOGIN", "10/minute")
+    RATE_LIMIT_SCAN_START: str = os.getenv("RATE_LIMIT_SCAN_START", "10/minute")
+    RATE_LIMIT_DEFAULT: str = os.getenv("RATE_LIMIT_DEFAULT", "60/minute")
+
 
 settings = Settings()

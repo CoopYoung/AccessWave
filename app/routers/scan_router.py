@@ -1,6 +1,6 @@
 import asyncio
 import datetime
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.limiter import limiter
 from app.models import Issue, Scan, Site, User
 from app.services.scan_runner import run_scan
 
@@ -95,7 +96,8 @@ async def list_sites(user: User = Depends(get_current_user), db: AsyncSession = 
 
 
 @router.post("/sites", response_model=SiteOut, status_code=201)
-async def create_site(body: SiteCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
+async def create_site(request: Request, body: SiteCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     plan = settings.PLAN_LIMITS[user.plan]
     count = (await db.execute(select(func.count()).select_from(Site).where(Site.user_id == user.id))).scalar()
     if count >= plan["sites"]:
@@ -117,7 +119,9 @@ async def delete_site(site_id: int, user: User = Depends(get_current_user), db: 
 # --- Scans ---
 
 @router.post("/sites/{site_id}/scan", response_model=ScanOut, status_code=201)
+@limiter.limit(settings.RATE_LIMIT_SCAN_START)
 async def start_scan(
+    request: Request,
     site_id: int,
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
