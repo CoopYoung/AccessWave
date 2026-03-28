@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <div class="links">
+            <a href="#" onclick="upgradePlan('pro')">Upgrade</a>
+            <a href="#" id="logout-btn">Log out</a>
+        </div>
+    </div></nav>
+
+    <div class="container dash">
+        <div class="dash-header">
+            <h1>Dashboard</h1>
+            <button class="btn btn-primary" id="add-site-btn">+ Add Site</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="label">Sites</div><div class="value" id="stat-sites">--</div></div>
+            <div class="stat-card"><div class="label">Total Scans</div><div class="value" id="stat-scans">--</div></div>
+            <div class="stat-card"><div class="label">Avg Score</div><div class="value" id="stat-score">--</div></div>
+            <div class="stat-card"><div class="label">Total Issues</div><div class="value" id="stat-issues">--</div></div>
+            <div class="stat-card"><div class="label">Critical</div><div class="value" id="stat-critical" style="color:var(--red)">--</div></div>
+        </div>
+
+        <div id="main-content"><p style="color:var(--text-muted)">Loading...</p></div>
+    </div>
+
+    <div id="add-modal" class="modal-overlay"><div class="modal">
+        <h3>Add a Site</h3>
+        <form id="site-form">
+            <div class="form-group"><label>Site Name</label><input type="text" name="name" required placeholder="My Website"></div>
+            <div class="form-group"><label>URL</label><input type="url" name="url" required placeholder="https://example.com"></div>
+            <button type="submit" class="btn btn-primary">Add Site</button>
+            <button type="button" class="btn btn-outline" id="close-modal" style="margin-left:8px">Cancel</button>
+        </form>
+    </div></div>
+
+    <script src="/static/js/app.js"></script>
+    <script>initDashboard();</script>
+</body>
+</html>

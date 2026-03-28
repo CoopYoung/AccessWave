@@ -1,0 +1,221 @@
+const API = {
+    token: localStorage.getItem('aw_token'),
+    async req(method, path, body) {
+        const h = { 'Content-Type': 'application/json' };
+        if (this.token) h['Authorization'] = `Bearer ${this.token}`;
+        const opts = { method, headers: h };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(`/api${path}`, opts);
+        if (res.status === 401) { this.logout(); return null; }
+        if (res.status === 204) return null;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        return data;
+    },
+    setToken(t) { this.token = t; localStorage.setItem('aw_token', t); },
+    logout() { this.token = null; localStorage.removeItem('aw_token'); window.location.href = '/login'; },
+    isLoggedIn() { return !!this.token; }
+};
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function scoreClass(s) { if (s >= 80) return 'score-good'; if (s >= 50) return 'score-ok'; return 'score-bad'; }
+function timeAgo(d) {
+    if (!d) return 'Never';
+    const s = Math.floor((Date.now() - new Date(d)) / 1000);
+    if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago'; return Math.floor(s/86400) + 'd ago';
+}
+function showToast(msg, type = 'success') {
+    let c = document.querySelector('.toast-container');
+    if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
+    const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
+    setTimeout(() => { t.style.animation = 'toast-in 0.3s ease reverse forwards'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// Auth
+function initAuth(type) {
+    if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
+    const form = document.getElementById('auth-form'), err = document.getElementById('error-msg');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault(); err.style.display = 'none';
+        const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+        try {
+            let data;
+            if (type === 'register') {
+                data = await API.req('POST', '/auth/register', { email: form.email.value, password: form.password.value });
+            } else {
+                const fd = new URLSearchParams(); fd.append('username', form.email.value); fd.append('password', form.password.value);
+                const r = await fetch('/api/auth/login', { method: 'POST', body: fd }); data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'Login failed');
+            }
+            API.setToken(data.access_token); window.location.href = '/dashboard';
+        } catch (e) { err.textContent = e.message; err.style.display = 'block'; btn.disabled = false; }
+    });
+}
+
+// Dashboard
+let currentView = 'sites'; // sites, scan-detail
+let currentSiteId = null;
+let currentScanId = null;
+
+async function initDashboard() {
+    if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
+    document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
+    document.getElementById('add-site-btn')?.addEventListener('click', () => document.getElementById('add-modal').classList.add('active'));
+    document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
+    document.getElementById('site-form')?.addEventListener('submit', addSite);
+    await loadStats();
+    await loadSites();
+}
+
+async function loadStats() {
+    try {
+        const s = await API.req('GET', '/dashboard/stats');
+        if (!s) return;
+        document.getElementById('stat-sites').textContent = s.total_sites;
+        document.getElementById('stat-scans').textContent = s.total_scans;
+        document.getElementById('stat-score').textContent = s.avg_score !== null ? s.avg_score : '--';
+        document.getElementById('stat-issues').textContent = s.total_issues;
+        document.getElementById('stat-critical').textContent = s.critical_issues;
+    } catch (e) { console.error(e); }
+}
+
+async function loadSites() {
+    const el = document.getElementById('main-content');
+    try {
+        const sites = await API.req('GET', '/sites');
+        if (!sites?.length) {
+            el.innerHTML = `<div class="empty-state"><div class="icon">\uD83C\uDF10</div><p>No sites added yet</p><p style="font-size:0.88rem">Add your first website to scan for accessibility issues.</p></div>`;
+            return;
+        }
+        el.innerHTML = `<div class="sites-list">${sites.map(s => `
+            <div class="site-card" onclick="openSite(${s.id})">
+                <div class="site-info">
+                    ${s.last_score !== null ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">--</div>`}
+                    <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
+                </div>
+                <div class="site-meta">
+                    <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
+                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})">Scan Now</button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
+                </div>
+            </div>`).join('')}</div>`;
+    } catch (e) { console.error(e); }
+}
+
+async function openSite(siteId) {
+    currentSiteId = siteId;
+    const el = document.getElementById('main-content');
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading scans...</p>';
+    try {
+        const scans = await API.req('GET', `/sites/${siteId}/scans`);
+        const sites = await API.req('GET', '/sites');
+        const site = sites.find(s => s.id === siteId);
+        if (!scans?.length) {
+            el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
+                <div class="empty-state"><div class="icon">\uD83D\uDD0D</div><p>No scans yet for ${esc(site?.name || '')}</p>
+                <button class="btn btn-green" onclick="startScan(${siteId})">Run First Scan</button></div>`;
+            return;
+        }
+        el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
+            <h2 style="margin-bottom:16px">${esc(site?.name || '')}</h2>
+            <div class="sites-list">${scans.map(s => `
+                <div class="site-card" onclick="openScan(${s.id})">
+                    <div class="site-info">
+                        ${s.score !== null ? `<div class="score-ring ${scoreClass(s.score)}">${s.score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">${s.status === 'running' ? '...' : '--'}</div>`}
+                        <div>
+                            <div class="name">Scan #${s.id} &mdash; ${s.status}</div>
+                            <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues &mdash; ${timeAgo(s.completed_at || s.created_at)}</div>
+                        </div>
+                    </div>
+                    <div class="severity-bar">
+                        ${s.critical_count ? `<span class="badge badge-critical">${s.critical_count} Critical</span>` : ''}
+                        ${s.serious_count ? `<span class="badge badge-serious">${s.serious_count} Serious</span>` : ''}
+                        ${s.moderate_count ? `<span class="badge badge-moderate">${s.moderate_count} Moderate</span>` : ''}
+                        ${s.minor_count ? `<span class="badge badge-minor">${s.minor_count} Minor</span>` : ''}
+                    </div>
+                </div>`).join('')}</div>`;
+    } catch (e) { console.error(e); }
+}
+
+async function openScan(scanId) {
+    currentScanId = scanId;
+    const el = document.getElementById('main-content');
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading issues...</p>';
+    try {
+        const [scan, issues] = await Promise.all([
+            API.req('GET', `/scans/${scanId}`),
+            API.req('GET', `/scans/${scanId}/issues`),
+        ]);
+        el.innerHTML = `
+            <a href="#" class="back-link" onclick="openSite(${scan.site_id});return false">&larr; Back to scans</a>
+            <div class="scan-detail">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>Scan #${scan.id}</h3>
+                    ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
+                </div>
+                <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
+                <div class="severity-bar">
+                    <span class="severity-count" style="background:var(--red-light);color:var(--red)">${scan.critical_count} Critical</span>
+                    <span class="severity-count" style="background:#fff7ed;color:#c2410c">${scan.serious_count} Serious</span>
+                    <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
+                    <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
+                </div>
+            </div>
+            <h3 style="margin-bottom:12px">Issues (${issues.length})</h3>
+            <div class="issues-list">${issues.map(i => `
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <span class="badge badge-${i.severity}">${i.severity}</span>
+                        ${i.wcag_criteria ? `<span class="wcag">WCAG ${i.wcag_criteria}</span>` : ''}
+                        <span style="color:var(--text-dim);font-size:0.82rem">${i.rule_id}</span>
+                    </div>
+                    <div class="issue-message">${esc(i.message)}</div>
+                    <div style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>
+                    ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
+                    ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
+                </div>`).join('')}</div>`;
+    } catch (e) { console.error(e); }
+}
+
+async function addSite(e) {
+    e.preventDefault();
+    const form = e.target;
+    try {
+        await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
+        document.getElementById('add-modal').classList.remove('active');
+        form.reset();
+        showToast('Site added');
+        await Promise.all([loadStats(), loadSites()]);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function startScan(siteId) {
+    try {
+        const scan = await API.req('POST', `/sites/${siteId}/scan`);
+        showToast('Scan started! Refresh in a few seconds to see results.');
+        // Poll for completion
+        setTimeout(async () => {
+            await loadStats();
+            if (currentSiteId === siteId) await openSite(siteId);
+            else await loadSites();
+        }, 8000);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function deleteSite(siteId) {
+    if (!confirm('Delete this site and all its scans?')) return;
+    try {
+        await API.req('DELETE', `/sites/${siteId}`);
+        showToast('Site deleted');
+        await Promise.all([loadStats(), loadSites()]);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function upgradePlan(plan) {
+    try {
+        const data = await API.req('POST', `/billing/checkout/${plan}`);
+        if (data?.checkout_url) window.location.href = data.checkout_url;
+    } catch (e) { showToast(e.message, 'error'); }
+}
