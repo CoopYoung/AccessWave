@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Literal
+
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
@@ -22,9 +24,11 @@ async def get_plan(user: User = Depends(get_current_user)):
 
 
 @router.post("/checkout/{plan}", response_model=CheckoutResponse)
-async def create_checkout(plan: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if plan not in ("pro", "agency"):
-        raise HTTPException(status_code=400, detail="Invalid plan")
+async def create_checkout(
+    plan: Literal["pro", "agency"],
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     price_id = settings.STRIPE_PRICE_PRO if plan == "pro" else settings.STRIPE_PRICE_AGENCY
     if not price_id:
         raise HTTPException(status_code=500, detail="Stripe not configured")
