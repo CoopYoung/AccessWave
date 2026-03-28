@@ -221,6 +221,8 @@ let currentSiteId = null;
 let currentScanId = null;
 let _scoreTrendChart = null;
 let _severityChart = null;
+let currentScan = null;
+let currentIssues = [];
 
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
@@ -391,6 +393,8 @@ async function openScan(scanId) {
             </div>`;
         }
 
+        currentScan = scan;
+        currentIssues = issues || [];
         el.innerHTML = `
             <a href="#" class="back-link" onclick="openSite(${scan.site_id});return false">&larr; Back to scans</a>
             <div class="scan-detail">
@@ -406,6 +410,14 @@ async function openScan(scanId) {
                     <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
                     <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
                 </div>
+            </div>
+            <div class="export-actions">
+                <button class="btn btn-outline btn-sm" onclick="exportCSV()" aria-label="Export issues as CSV spreadsheet">
+                    <span aria-hidden="true">&#8595;</span> Export CSV
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="exportPDF()" aria-label="Export scan report as PDF">
+                    <span aria-hidden="true">&#8595;</span> Export PDF
+                </button>
             </div>
             <h3 style="margin-bottom:12px">Issues (${issues.length})</h3>
             <div class="issues-list">${issues.map(i => `
@@ -451,6 +463,111 @@ function toggleSection(btn) {
 function expandAllIssues() {
     document.querySelectorAll('.issue-group-header[aria-expanded="false"]').forEach(toggleGroup);
     document.querySelectorAll('.issue-toggle[aria-expanded="false"]').forEach(toggleSection);
+function exportCSV() {
+    if (!currentIssues.length) { showToast('No issues to export', 'info'); return; }
+    const headers = ['Severity', 'WCAG Criteria', 'Rule ID', 'Message', 'Page URL', 'Selector', 'How to Fix'];
+    const rows = currentIssues.map(i => [
+        i.severity,
+        i.wcag_criteria || '',
+        i.rule_id,
+        i.message,
+        i.page_url,
+        i.selector || '',
+        i.how_to_fix || ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`));
+    const csv = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scan-${currentScanId}-issues.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('CSV downloaded');
+}
+
+async function exportPDF() {
+    if (typeof window.jspdf === 'undefined') {
+        showToast('PDF library is still loading — please try again in a moment', 'info');
+        return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+
+    // Header bar
+    doc.setFillColor(79, 70, 229);
+    doc.rect(0, 0, pageW, 16, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('AccessWave — Accessibility Scan Report', 14, 11);
+
+    // Scan metadata
+    doc.setTextColor(26, 29, 35);
+    doc.setFontSize(14);
+    doc.text(`Scan #${currentScan.id}`, 14, 26);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    const scoreLabel = currentScan.score !== null ? currentScan.score.toFixed(0) + ' / 100' : 'N/A';
+    doc.text(`Score: ${scoreLabel}   |   Pages scanned: ${currentScan.pages_scanned}   |   Total issues: ${currentScan.total_issues}`, 14, 33);
+    doc.text(`Critical: ${currentScan.critical_count}   Serious: ${currentScan.serious_count}   Moderate: ${currentScan.moderate_count}   Minor: ${currentScan.minor_count}`, 14, 39);
+
+    if (!currentIssues.length) {
+        doc.setTextColor(5, 150, 105);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('No issues found — great job!', 14, 52);
+    } else {
+        const severityColors = {
+            critical: [220, 38, 38],
+            serious:  [194, 65, 12],
+            moderate: [217, 119, 6],
+            minor:    [37, 99, 235],
+        };
+        doc.autoTable({
+            startY: 46,
+            head: [['Severity', 'WCAG', 'Rule ID', 'Message', 'Page URL']],
+            body: currentIssues.map(i => [
+                i.severity,
+                i.wcag_criteria || '',
+                i.rule_id,
+                i.message,
+                i.page_url,
+            ]),
+            styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+            headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+            columnStyles: {
+                0: { cellWidth: 22 },
+                1: { cellWidth: 18 },
+                2: { cellWidth: 36 },
+                3: { cellWidth: 'auto' },
+                4: { cellWidth: 70 },
+            },
+            didParseCell(data) {
+                if (data.section === 'body' && data.column.index === 0) {
+                    const color = severityColors[data.cell.raw] || [26, 29, 35];
+                    data.cell.styles.textColor = color;
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            },
+            alternateRowStyles: { fillColor: [244, 245, 247] },
+        });
+    }
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+        doc.setPage(p);
+        doc.setFontSize(8);
+        doc.setTextColor(156, 163, 175);
+        doc.text(`Page ${p} of ${pageCount}`, pageW - 14, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+    }
+
+    doc.save(`scan-${currentScanId}-report.pdf`);
+    showToast('PDF downloaded');
 }
 
 async function addSite(e) {
