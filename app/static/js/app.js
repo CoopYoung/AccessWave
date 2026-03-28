@@ -44,6 +44,80 @@ const API = {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function scoreClass(s) { if (s >= 80) return 'score-good'; if (s >= 50) return 'score-ok'; return 'score-bad'; }
+
+/**
+ * Build an accessible SVG arc gauge for a 0–100 accessibility score.
+ * The arc spans 270° (gap at the bottom), colour-coded green/amber/red.
+ * Call animateGauges(container) after injecting the returned HTML to run
+ * the fill-in animation (double rAF so the initial dashoffset is painted first).
+ *
+ * @param {number} score   0–100
+ * @param {number} size    SVG width/height in px (default 140)
+ * @returns {string}       SVG HTML string
+ */
+function buildGauge(score, size = 140) {
+    const sw    = Math.round(size * 0.09);          // stroke width
+    const r     = (size - sw) / 2;                  // radius
+    const cx    = size / 2, cy = size / 2;          // centre
+    const arcLen = 0.75 * 2 * Math.PI * r;          // 270° arc length
+    const gap    = 2 * Math.PI * r - arcLen + 1;    // remaining gap (+1 avoids hairline)
+
+    const cls = score >= 80 ? 'gauge-good' : score >= 50 ? 'gauge-ok' : 'gauge-bad';
+    const lbl = score >= 80 ? 'Good' : score >= 50 ? 'Needs improvement' : 'Poor';
+
+    // Start at arcLen (empty) → animate to finalOffset via animateGauges()
+    const finalOffset = arcLen * (1 - score / 100);
+
+    // Typography — absolute px values so they scale with `size`
+    const numSize  = Math.round(size * 0.2);                      // score number
+    const lblSize  = Math.round(size * 0.09);                     // label
+    const numY     = cy - numSize * 0.15;                         // slightly above centre
+    const lblY     = numY + numSize * 0.55 + lblSize;             // below number
+
+    // stroke-dasharray: <visible arc> <gap> — the gap ensures no repeat wraps
+    const da = `${arcLen.toFixed(2)} ${gap.toFixed(2)}`;
+
+    return `<svg role="meter"
+        aria-label="Accessibility score: ${Math.round(score)} out of 100 – ${lbl}"
+        aria-valuenow="${Math.round(score)}" aria-valuemin="0" aria-valuemax="100"
+        width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
+        class="score-gauge" focusable="false">
+      <circle class="gauge-track"
+        cx="${cx}" cy="${cy}" r="${r.toFixed(2)}"
+        fill="none" stroke-width="${sw}"
+        stroke-dasharray="${da}"
+        transform="rotate(135, ${cx}, ${cy})"/>
+      <circle class="gauge-fill ${cls}"
+        cx="${cx}" cy="${cy}" r="${r.toFixed(2)}"
+        fill="none" stroke-width="${sw}"
+        stroke-dasharray="${da}"
+        stroke-dashoffset="${arcLen.toFixed(2)}"
+        data-final-offset="${finalOffset.toFixed(2)}"
+        transform="rotate(135, ${cx}, ${cy})"/>
+      <text class="gauge-score" aria-hidden="true"
+        x="${cx}" y="${numY.toFixed(1)}"
+        text-anchor="middle" dominant-baseline="middle"
+        font-size="${numSize}">${Math.round(score)}</text>
+      <text class="gauge-label" aria-hidden="true"
+        x="${cx}" y="${lblY.toFixed(1)}"
+        text-anchor="middle" dominant-baseline="middle"
+        font-size="${lblSize}">${lbl}</text>
+    </svg>`;
+}
+
+/**
+ * Trigger the fill animation for every gauge inside `container`.
+ * Must be called after the gauge HTML has been inserted into the DOM.
+ */
+function animateGauges(container) {
+    // Double rAF: first frame paints the initial (empty) state,
+    // second frame applies the target offset → CSS transition fires.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        (container || document).querySelectorAll('.gauge-fill[data-final-offset]').forEach(el => {
+            el.style.strokeDashoffset = el.dataset.finalOffset;
+        });
+    }));
+}
 function timeAgo(d) {
     if (!d) return 'Never';
     const s = Math.floor((Date.now() - new Date(d)) / 1000);
@@ -512,6 +586,18 @@ async function openScan(scanId) {
                     <span class="severity-count" style="background:#fff7ed;color:#c2410c">${scan.serious_count} Serious</span>
                     <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
                     <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
+                <div class="scan-summary">
+                    <div class="scan-summary-info">
+                        <h3>Scan #${scan.id}</h3>
+                        <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
+                        <div class="severity-bar">
+                            <span class="severity-count" style="background:var(--red-light);color:var(--red)">${scan.critical_count} Critical</span>
+                            <span class="severity-count" style="background:#fff7ed;color:#c2410c">${scan.serious_count} Serious</span>
+                            <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
+                            <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
+                        </div>
+                    </div>
+                    ${scan.score !== null ? buildGauge(scan.score, 140) : ''}
                 </div>
             </div>
             <div class="export-actions">
@@ -546,6 +632,7 @@ async function openScan(scanId) {
         if (issues.length && window.hljs) {
             el.querySelectorAll('.issue-code code').forEach(b => hljs.highlightElement(b));
         }
+        animateGauges(el);
     } catch (e) { console.error(e); }
 }
 
