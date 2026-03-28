@@ -10,7 +10,10 @@
 <body>
     <nav><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
-        <div class="links">
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
             <a href="/login">Log in</a>

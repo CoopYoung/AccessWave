@@ -151,12 +151,6 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .chart-wrap { position: relative; height: 220px; }
 .chart-wrap-sm { height: 240px; }
 
-@media (max-width: 768px) {
-    .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
-    .charts-grid { grid-template-columns: 1fr; }
-}
-
 /* =====================================================
    Animations & Transitions (Track B #8)
    All motion animations are gated on prefers-reduced-motion.
@@ -249,4 +243,123 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
 
     /* Stat counter pop */
     .stat-card .value.counting { animation: aw-count-pop 0.35s ease; }
+}
+
+/* ── Hamburger nav toggle (hidden on desktop) ── */
+.nav-toggle {
+    display: none;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+}
+.nav-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: transform 0.2s, opacity 0.2s;
+}
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── Mobile: 768 px and below ── */
+@media (max-width: 768px) {
+    .container { padding: 0 16px; }
+
+    /* Nav: collapse links behind toggle */
+    nav .container { flex-wrap: wrap; }
+    .nav-toggle { display: flex; }
+    nav .links {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        gap: 0;
+        border-top: 1px solid var(--border);
+        padding: 8px 0;
+        margin-top: 8px;
+    }
+    nav .links.open { display: flex; }
+    nav .links a {
+        padding: 12px 4px;
+        font-size: 0.95rem;
+        border-bottom: 1px solid var(--surface-2);
+        color: var(--text);
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    nav .links a:last-child { border-bottom: none; }
+    /* "Start Free" pill becomes a plain link on mobile */
+    nav .links .btn-sm {
+        background: none;
+        color: var(--primary);
+        font-size: 0.95rem;
+        padding: 12px 4px;
+        border: none;
+        border-radius: 0;
+        font-weight: 600;
+        min-height: 44px;
+        width: auto;
+        justify-content: flex-start;
+    }
+
+    /* Hero */
+    .hero { padding: 48px 0 40px; }
+    .hero h1 { font-size: 2.2rem; }
+    .hero .cta { flex-direction: column; align-items: stretch; }
+    .hero .cta .btn { width: 100%; justify-content: center; }
+    .hero-stats { flex-direction: column; gap: 16px; align-items: center; }
+
+    /* Features & Pricing grids → single column */
+    .features, .pricing-grid { grid-template-columns: 1fr; }
+
+    /* Charts → single column */
+    .charts-grid { grid-template-columns: 1fr; }
+
+    /* Dashboard */
+    .dash { padding: 24px 0; }
+    .dash-header { flex-wrap: wrap; gap: 12px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* Site cards: stack info above meta/actions */
+    .site-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .site-info { width: 100%; }
+    .site-meta { width: 100%; justify-content: space-between; }
+
+    /* Scan detail: allow header to wrap so score ring doesn't overflow */
+    .severity-bar { gap: 8px; }
+
+    /* Modal: keep within viewport */
+    .modal { max-width: calc(100vw - 32px); padding: 24px; }
+
+    /* Auth card */
+    .auth-card { padding: 32px 20px; }
+
+    /* Issue URL: don't overflow narrow screens */
+    .issue-url { word-break: break-all; }
+
+    /* Toast: full width so text isn't truncated */
+    .toast-container { left: 16px; right: 16px; bottom: 16px; }
+    .toast { width: 100%; }
+}
+
+/* ── Extra-small: 480 px and below ── */
+@media (max-width: 480px) {
+    .hero { padding: 40px 0 32px; }
+    .hero h1 { font-size: 1.85rem; }
+    .hero-stat .num { font-size: 1.8rem; }
+    .pricing { padding: 48px 0; }
+    .feature-card { padding: 20px; }
+    .price-card { padding: 24px; }
+    .score-ring { width: 48px; height: 48px; font-size: 0.85rem; }
+    .auth-card { padding: 28px 16px; }
+    .dash-header h1 { font-size: 1.4rem; }
+    .stat-card .value { font-size: 1.25rem; }
 }
