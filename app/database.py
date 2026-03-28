@@ -17,5 +17,11 @@ async def get_db():
 
 
 async def init_db():
+    """Create tables if they don't exist.
+
+    In production, prefer running ``alembic upgrade head`` before starting the
+    server so that schema changes are applied incrementally and tracked.
+    This fallback keeps the development workflow simple (no extra step needed).
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
