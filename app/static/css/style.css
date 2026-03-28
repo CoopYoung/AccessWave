@@ -115,7 +115,15 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .back-link { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 0.88rem; margin-bottom: 16px; }
 .back-link:hover { color: var(--primary); }
 
+/* Charts */
+.charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 28px; }
+.chart-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+.chart-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 16px; }
+.chart-wrap { position: relative; height: 220px; }
+.chart-wrap-sm { height: 240px; }
+
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
+    .charts-grid { grid-template-columns: 1fr; }
 }
