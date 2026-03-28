@@ -348,10 +348,54 @@ async function openScan(scanId) {
             API.req('GET', `/scans/${scanId}`),
             API.req('GET', `/scans/${scanId}/issues`),
         ]);
+
+        const SEVERITIES = ['critical', 'serious', 'moderate', 'minor'];
+        const grouped = { critical: [], serious: [], moderate: [], minor: [] };
+        issues.forEach(i => { (grouped[i.severity] ?? grouped.minor).push(i); });
+
+        function issueCard(i) {
+            const uid = `i${i.id}`;
+            const hasCode = !!i.element_html;
+            const hasFix = !!i.how_to_fix;
+            return `<div class="issue-card ${esc(i.severity)}">
+                <div class="issue-header">
+                    <span class="badge badge-${esc(i.severity)}">${esc(i.severity)}</span>
+                    ${i.wcag_criteria ? `<span class="wcag">WCAG ${esc(i.wcag_criteria)}</span>` : ''}
+                    <code class="issue-rule-id">${esc(i.rule_id)}</code>
+                </div>
+                <p class="issue-message">${esc(i.message)}</p>
+                <p class="issue-page-url">${esc(i.page_url)}</p>
+                ${i.selector ? `<code class="issue-selector" title="${esc(i.selector)}">${esc(i.selector)}</code>` : ''}
+                ${hasCode || hasFix ? `<div class="issue-actions">
+                    ${hasCode ? `<button class="issue-toggle" aria-expanded="false" aria-controls="${uid}-code" onclick="toggleSection(this)"><span class="toggle-icon" aria-hidden="true">&#9660;</span> HTML snippet</button>` : ''}
+                    ${hasFix ? `<button class="issue-toggle" aria-expanded="false" aria-controls="${uid}-fix" onclick="toggleSection(this)"><span class="toggle-icon" aria-hidden="true">&#9660;</span> How to fix</button>` : ''}
+                </div>` : ''}
+                ${hasCode ? `<div id="${uid}-code" class="issue-section" hidden><div class="issue-code"><code class="language-html">${esc(i.element_html)}</code></div></div>` : ''}
+                ${hasFix ? `<div id="${uid}-fix" class="issue-section" hidden><div class="issue-fix">${esc(i.how_to_fix)}</div></div>` : ''}
+            </div>`;
+        }
+
+        function severityGroup(sev) {
+            const grp = grouped[sev];
+            if (!grp.length) return '';
+            const gid = `grp-${sev}`;
+            const n = grp.length;
+            const label = sev[0].toUpperCase() + sev.slice(1);
+            return `<div class="issue-group">
+                <button class="issue-group-header ${sev}" aria-expanded="true" aria-controls="${gid}" onclick="toggleGroup(this)">
+                    <span class="group-title">${label}</span>
+                    <span class="group-count">${n} ${n === 1 ? 'issue' : 'issues'}</span>
+                    <span class="group-toggle" aria-hidden="true">&#9660;</span>
+                </button>
+                <div id="${gid}" class="issue-group-body">${grp.map(issueCard).join('')}</div>
+            </div>`;
+        }
+
         el.innerHTML = `
             <a href="#" class="back-link" onclick="openSite(${scan.site_id});return false">&larr; Back to scans</a>
             <div class="scan-detail">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div class="scan-detail-header">
                     <h3>Scan #${scan.id}</h3>
                     ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
                 </div>
@@ -376,7 +420,37 @@ async function openScan(scanId) {
                     ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
                     ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
                 </div>`).join('')}</div>`;
+            <div class="issues-header">
+                <h3>Issues (${issues.length})</h3>
+                ${issues.length ? `<button class="btn btn-sm btn-outline" onclick="expandAllIssues()">Expand All</button>` : ''}
+            </div>
+            ${issues.length
+                ? `<div class="issues-list" role="list">${SEVERITIES.map(severityGroup).join('')}</div>`
+                : `<p style="color:var(--text-muted)">No issues found &mdash; great job!</p>`}`;
+
+        if (issues.length && window.hljs) {
+            el.querySelectorAll('.issue-code code').forEach(b => hljs.highlightElement(b));
+        }
     } catch (e) { console.error(e); }
+}
+
+function toggleGroup(btn) {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    const body = document.getElementById(btn.getAttribute('aria-controls'));
+    if (body) body.hidden = expanded;
+}
+
+function toggleSection(btn) {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    const section = document.getElementById(btn.getAttribute('aria-controls'));
+    if (section) section.hidden = expanded;
+}
+
+function expandAllIssues() {
+    document.querySelectorAll('.issue-group-header[aria-expanded="false"]').forEach(toggleGroup);
+    document.querySelectorAll('.issue-toggle[aria-expanded="false"]').forEach(toggleSection);
 }
 
 async function addSite(e) {
