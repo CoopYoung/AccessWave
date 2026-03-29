@@ -496,6 +496,7 @@ let closeShortcutsModal = null;
 let scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
 let scanPage = 0;
 const SCAN_PAGE_SIZE = 10;
+let selectedSites = new Set();
 
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
@@ -542,6 +543,20 @@ async function initDashboard() {
 
     initKeyboardShortcuts();
 
+    // Inject bulk action toolbar (persistent, shown/hidden via CSS transform)
+    if (!document.getElementById('bulk-toolbar')) {
+        const tb = document.createElement('div');
+        tb.id = 'bulk-toolbar';
+        tb.className = 'bulk-toolbar';
+        tb.setAttribute('role', 'toolbar');
+        tb.setAttribute('aria-label', 'Bulk actions for selected sites');
+        tb.innerHTML = `
+            <span class="bulk-count" id="bulk-count" aria-live="polite"></span>
+            <button class="btn-bulk" onclick="bulkScan()">Scan Selected</button>
+            <button class="btn-bulk btn-bulk-delete" onclick="bulkDelete()">Delete Selected</button>
+            <button class="btn-bulk btn-bulk-cancel" onclick="clearSelection()">Cancel</button>`;
+        document.body.appendChild(tb);
+    }
     await loadStats();
     await Promise.all([loadSites(), loadCharts()]);
 }
@@ -624,6 +639,8 @@ async function loadStats() {
 }
 
 async function loadSites() {
+    selectedSites.clear();
+    updateBulkToolbar();
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="sites-list" aria-busy="true" aria-label="Loading sites">${skSiteCards(3)}</div>`;
     currentView = 'sites'; currentSiteId = null; currentScanId = null;
@@ -651,7 +668,122 @@ async function loadSites() {
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
                 </div>
             </div>`).join('')}</div>`;
+        el.innerHTML = `
+            <div class="sites-toolbar">
+                <label class="select-all-label">
+                    <input type="checkbox" id="select-all-check" onchange="toggleSelectAll(this)" aria-label="Select all sites">
+                    <span>Select all</span>
+                </label>
+                <span class="selection-info" id="selection-info" aria-live="polite"></span>
+            </div>
+            <div class="sites-list">${sites.map(s => {
+                const scoreHtml = s.last_score !== null
+                    ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
+                    : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">--</div>`;
+                return `
+                <div class="site-card" data-site-id="${s.id}">
+                    <label class="site-check-wrap">
+                        <input type="checkbox" class="site-check" onchange="toggleSiteSelect(${s.id}, this)" aria-label="Select ${esc(s.name)}">
+                    </label>
+                    <div class="site-clickable" onclick="openSite(${s.id})" role="button" tabindex="0"
+                         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
+                        ${scoreHtml}
+                        <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
+                    </div>
+                    <div class="site-meta">
+                        <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
+                        <button class="btn btn-sm btn-green" onclick="startScan(${s.id})">Scan Now</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSite(${s.id})">Delete</button>
+                    </div>
+                </div>`;
+            }).join('')}</div>`;
     } catch (e) { console.error(e); }
+}
+
+function toggleSiteSelect(siteId, checkbox) {
+    if (checkbox.checked) selectedSites.add(siteId);
+    else selectedSites.delete(siteId);
+    const card = document.querySelector(`.site-card[data-site-id="${siteId}"]`);
+    if (card) card.classList.toggle('selected', checkbox.checked);
+    _syncSelectAll();
+    updateBulkToolbar();
+}
+
+function toggleSelectAll(checkbox) {
+    document.querySelectorAll('.site-check').forEach(ch => {
+        const id = parseInt(ch.closest('.site-card').dataset.siteId);
+        ch.checked = checkbox.checked;
+        const card = ch.closest('.site-card');
+        if (checkbox.checked) { selectedSites.add(id); card.classList.add('selected'); }
+        else { selectedSites.delete(id); card.classList.remove('selected'); }
+    });
+    updateBulkToolbar();
+}
+
+function _syncSelectAll() {
+    const all = document.querySelectorAll('.site-check');
+    const checked = document.querySelectorAll('.site-check:checked');
+    const sa = document.getElementById('select-all-check');
+    if (!sa) return;
+    sa.indeterminate = checked.length > 0 && checked.length < all.length;
+    sa.checked = all.length > 0 && checked.length === all.length;
+}
+
+function updateBulkToolbar() {
+    const toolbar = document.getElementById('bulk-toolbar');
+    const info = document.getElementById('selection-info');
+    if (!toolbar) return;
+    const n = selectedSites.size;
+    if (n > 0) {
+        toolbar.classList.add('visible');
+        document.getElementById('bulk-count').textContent = `${n} site${n !== 1 ? 's' : ''} selected`;
+        if (info) info.textContent = `${n} selected`;
+    } else {
+        toolbar.classList.remove('visible');
+        if (info) info.textContent = '';
+    }
+}
+
+function clearSelection() {
+    selectedSites.clear();
+    document.querySelectorAll('.site-check').forEach(ch => { ch.checked = false; });
+    document.querySelectorAll('.site-card.selected').forEach(c => c.classList.remove('selected'));
+    const sa = document.getElementById('select-all-check');
+    if (sa) { sa.checked = false; sa.indeterminate = false; }
+    updateBulkToolbar();
+}
+
+async function bulkScan() {
+    const ids = [...selectedSites];
+    let started = 0, skipped = 0;
+    for (const id of ids) {
+        try { await API.req('POST', `/sites/${id}/scan`); started++; }
+        catch (e) { skipped++; }
+    }
+    clearSelection();
+    const msg = started
+        ? `Started ${started} scan${started !== 1 ? 's' : ''}${skipped ? ` (${skipped} already running)` : ''}`
+        : `All selected scans are already running`;
+    showToast(msg, skipped === ids.length ? 'error' : 'success');
+    await loadSites();
+    setTimeout(async () => { await Promise.all([loadStats(), loadSites()]); }, 8000);
+}
+
+async function bulkDelete() {
+    const count = selectedSites.size;
+    if (!confirm(`Delete ${count} site${count !== 1 ? 's' : ''} and all their scan history? This cannot be undone.`)) return;
+    const ids = [...selectedSites];
+    let deleted = 0, failed = 0;
+    for (const id of ids) {
+        try { await API.req('DELETE', `/sites/${id}`); deleted++; }
+        catch (e) { failed++; }
+    }
+    clearSelection();
+    showToast(
+        `Deleted ${deleted} site${deleted !== 1 ? 's' : ''}${failed ? ` (${failed} failed)` : ''}`,
+        failed > 0 && deleted === 0 ? 'error' : 'success'
+    );
+    await Promise.all([loadStats(), loadSites()]);
 }
 
 async function openSite(siteId) {
@@ -1271,6 +1403,7 @@ async function deleteSite(siteId) {
     if (!confirm('Delete this site and all its scans?')) return;
     try {
         await API.req('DELETE', `/sites/${siteId}`);
+        selectedSites.delete(siteId);
         showToast('Site deleted');
         await Promise.all([loadStats(), loadSites()]);
     } catch (e) { showToast(e.message, 'error'); }
