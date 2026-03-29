@@ -1,5 +1,6 @@
 """Orchestrates a full site scan: crawl -> check each page -> save results."""
 
+import asyncio
 import datetime
 
 import structlog
@@ -19,6 +20,7 @@ from app.metrics import (
 )
 from app.models import Issue, Scan, Site
 from app.services.crawler import crawl_site
+from app.services.scan_progress import clear_progress, update_progress
 from app.services.scanner import IssueFound, calculate_score, scan_html
 
 logger = structlog.get_logger("accesswave.runner")
@@ -46,14 +48,27 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
         ACTIVE_SCANS.inc()
 
         try:
+            update_progress(scan.id, pages_done=0, pages_total=None, status="crawling")
             pages = await crawl_site(site.url, max_pages=max_pages)
+            html_pages = [p for p in pages if p.get("html")]
+            pages_total = len(html_pages)
+
             all_issues: list[IssueFound] = []
+            pages_done = 0
 
             for page in pages:
                 if not page.get("html"):
                     continue
+                update_progress(
+                    scan.id,
+                    pages_done=pages_done,
+                    pages_total=pages_total,
+                    status="scanning",
+                    current_url=page["url"],
+                )
                 page_issues = scan_html(page["html"], page["url"])
                 all_issues.extend(page_issues)
+                pages_done += 1
 
                 for issue in page_issues:
                     db.add(Issue(
@@ -68,7 +83,7 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
                         how_to_fix=issue.how_to_fix,
                     ))
 
-            scan.pages_scanned = len([p for p in pages if p.get("html")])
+            scan.pages_scanned = pages_total
             scan.total_issues = len(all_issues)
             scan.critical_count = sum(1 for i in all_issues if i.severity == "critical")
             scan.serious_count = sum(1 for i in all_issues if i.severity == "serious")
@@ -104,6 +119,7 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
                 SCAN_DURATION_SECONDS.observe(duration)
 
             SCANS_COMPLETED.inc()
+            update_progress(scan.id, pages_done=pages_total, pages_total=pages_total, status="completed")
             logger.info(f"Scan {scan.id} complete: {scan.pages_scanned} pages, {scan.total_issues} issues, score {scan.score}")
 
         except Exception as e:
@@ -114,5 +130,10 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
 
         finally:
             ACTIVE_SCANS.dec()
+            update_progress(scan.id, pages_done=0, pages_total=0, status="failed")
 
         await db.commit()
+        # Keep the final progress entry briefly so SSE clients can receive it,
+        # then remove it to prevent stale accumulation.
+        await asyncio.sleep(10)
+        clear_progress(scan.id)

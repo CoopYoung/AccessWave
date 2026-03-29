@@ -544,6 +544,12 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
 }
 .dark-toggle:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 .dark-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* Scan progress banner (SSE live updates) */
+.scan-progress-banner { background: var(--primary-light); border: 1px solid var(--primary); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; }
+.scan-progress-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.scan-progress-text { font-size: 0.88rem; font-weight: 600; color: var(--primary); flex: 1; }
+.scan-progress-bar-track { background: rgba(79,70,229,0.15); border-radius: 100px; height: 8px; overflow: hidden; }
+.scan-progress-bar-fill { background: var(--primary); height: 100%; border-radius: 100px; transition: width 0.4s ease; min-width: 0; }
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
