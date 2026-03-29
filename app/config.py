@@ -59,5 +59,10 @@ class Settings:
     RATE_LIMIT_SCAN_START: str = os.getenv("RATE_LIMIT_SCAN_START", "10/minute")
     RATE_LIMIT_DEFAULT: str = os.getenv("RATE_LIMIT_DEFAULT", "60/minute")
 
+    # Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    # "console" → human-readable coloured output (dev); "json" → JSON lines (production)
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "console")
+
 
 settings = Settings()

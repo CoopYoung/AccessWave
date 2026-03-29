@@ -8,7 +8,10 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
+import structlog
 from bs4 import BeautifulSoup, Tag
+
+logger = structlog.get_logger("accesswave.scanner")
 
 
 @dataclass
@@ -50,8 +53,8 @@ def scan_html(html: str, page_url: str) -> list[IssueFound]:
     for check in checks:
         try:
             issues.extend(check(soup, page_url))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("check_error", check=check.__name__, page_url=page_url, error=str(e))
 
     return issues
 
