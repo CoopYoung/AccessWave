@@ -1667,6 +1667,82 @@ async function exportPDF() {
 
     doc.save(`scan-${currentScanId}-report.pdf`);
     showToast('PDF downloaded');
+            <div class="issues-toolbar">
+                <h3>Issues (${issues.length})</h3>
+                <div class="group-toggle" role="group" aria-label="Group issues by">
+                    <button class="group-btn active" id="group-btn-severity" onclick="switchIssueGroup('severity')" aria-pressed="true">By Severity</button>
+                    <button class="group-btn" id="group-btn-page" onclick="switchIssueGroup('page')" aria-pressed="false">By Page</button>
+                </div>
+            </div>
+            <div id="issues-container"></div>`;
+        el._scanIssues = issues;
+        renderIssuesBySeverity(issues);
+    } catch (e) { console.error(e); }
+}
+
+function issueCardHtml(i, showUrl = true) {
+    return `<div class="issue-card">
+        <div class="issue-header">
+            <span class="badge badge-${i.severity}">${i.severity}</span>
+            ${i.wcag_criteria ? `<span class="wcag">WCAG ${i.wcag_criteria}</span>` : ''}
+            <span style="color:var(--text-dim);font-size:0.82rem">${esc(i.rule_id)}</span>
+        </div>
+        <div class="issue-message">${esc(i.message)}</div>
+        ${showUrl ? `<div style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>` : ''}
+        ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
+        ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
+    </div>`;
+}
+
+function renderIssuesBySeverity(issues) {
+    const container = document.getElementById('issues-container');
+    if (!container) return;
+    container.innerHTML = `<div class="issues-list">${issues.map(i => issueCardHtml(i)).join('')}</div>`;
+}
+
+function renderIssuesByPage(issues) {
+    const container = document.getElementById('issues-container');
+    if (!container) return;
+    const groups = {};
+    for (const issue of issues) {
+        if (!groups[issue.page_url]) groups[issue.page_url] = [];
+        groups[issue.page_url].push(issue);
+    }
+    const urls = Object.keys(groups).sort();
+    container.innerHTML = urls.map((url, idx) => {
+        const count = groups[url].length;
+        const groupId = `pg-${idx}`;
+        return `<div class="page-group">
+            <button class="page-group-header" onclick="togglePageGroup(this,'${groupId}')" aria-expanded="true" aria-controls="${groupId}">
+                <span class="page-group-chevron" aria-hidden="true">▾</span>
+                <span class="page-group-url">${esc(url)}</span>
+                <span class="page-group-count">${count} issue${count !== 1 ? 's' : ''}</span>
+            </button>
+            <div class="page-group-issues" id="${groupId}">
+                <div class="issues-list">${groups[url].map(i => issueCardHtml(i, false)).join('')}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function switchIssueGroup(mode) {
+    const el = document.getElementById('main-content');
+    const isSeverity = mode === 'severity';
+    const btnSev = document.getElementById('group-btn-severity');
+    const btnPage = document.getElementById('group-btn-page');
+    if (btnSev) { btnSev.classList.toggle('active', isSeverity); btnSev.setAttribute('aria-pressed', isSeverity); }
+    if (btnPage) { btnPage.classList.toggle('active', !isSeverity); btnPage.setAttribute('aria-pressed', !isSeverity); }
+    if (isSeverity) renderIssuesBySeverity(el._scanIssues || []);
+    else renderIssuesByPage(el._scanIssues || []);
+}
+
+function togglePageGroup(btn, groupId) {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    const panel = document.getElementById(groupId);
+    if (panel) panel.hidden = expanded;
+    const chevron = btn.querySelector('.page-group-chevron');
+    if (chevron) chevron.style.transform = expanded ? 'rotate(-90deg)' : '';
 }
 
 async function addSite(e) {
