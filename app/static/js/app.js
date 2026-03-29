@@ -58,6 +58,8 @@ function initAuth(type) {
 let currentView = 'sites'; // sites, scan-detail
 let currentSiteId = null;
 let currentScanId = null;
+let _scoreTrendChart = null;
+let _severityChart = null;
 
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
@@ -66,7 +68,7 @@ async function initDashboard() {
     document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
     document.getElementById('site-form')?.addEventListener('submit', addSite);
     await loadStats();
-    await loadSites();
+    await Promise.all([loadSites(), loadCharts()]);
 }
 
 async function loadStats() {
@@ -198,6 +200,7 @@ async function startScan(siteId) {
         // Poll for completion
         setTimeout(async () => {
             await loadStats();
+            await loadCharts();
             if (currentSiteId === siteId) await openSite(siteId);
             else await loadSites();
         }, 8000);
@@ -218,4 +221,120 @@ async function upgradePlan(plan) {
         const data = await API.req('POST', `/billing/checkout/${plan}`);
         if (data?.checkout_url) window.location.href = data.checkout_url;
     } catch (e) { showToast(e.message, 'error'); }
+}
+
+// Charts
+async function loadCharts() {
+    if (typeof Chart === 'undefined') return;
+    try {
+        const data = await API.req('GET', '/dashboard/chart-data');
+        if (!data) return;
+        const hasScoreData = data.score_history.some(s => s.scans.length > 0);
+        const hasSeverityData = Object.values(data.severity_totals).some(v => v > 0);
+        const section = document.getElementById('charts-section');
+        if (!hasScoreData && !hasSeverityData) { section.hidden = true; return; }
+        section.hidden = false;
+        if (hasScoreData) _renderScoreTrend(data.score_history);
+        if (hasSeverityData) _renderSeverityChart(data.severity_totals);
+    } catch (e) { console.error('Charts failed to load:', e); }
+}
+
+function _renderScoreTrend(scoreHistory) {
+    const ctx = document.getElementById('score-trend-chart');
+    if (!ctx) return;
+    if (_scoreTrendChart) { _scoreTrendChart.destroy(); _scoreTrendChart = null; }
+
+    // Build sorted union of all dates as category labels
+    const allDatesSet = new Set();
+    scoreHistory.forEach(site => site.scans.forEach(s => allDatesSet.add(s.date.substring(0, 10))));
+    const allDates = [...allDatesSet].sort();
+    const labels = allDates.map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    const palette = ['#4f46e5', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed'];
+    const datasets = scoreHistory.map((site, i) => {
+        const byDate = Object.fromEntries(site.scans.map(s => [s.date.substring(0, 10), s.score]));
+        return {
+            label: site.site_name,
+            data: allDates.map(d => byDate[d] ?? null),
+            borderColor: palette[i % palette.length],
+            backgroundColor: palette[i % palette.length] + '1a',
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            spanGaps: false,
+            fill: false,
+            borderWidth: 2,
+        };
+    });
+
+    _scoreTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: scoreHistory.length > 1,
+                    labels: { color: '#1a1d23', font: { size: 12 }, usePointStyle: true, pointStyleWidth: 8 },
+                },
+                tooltip: {
+                    callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y !== null ? c.parsed.y.toFixed(1) : 'N/A'}` },
+                },
+            },
+            scales: {
+                x: { grid: { color: '#e2e5ea' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+                y: {
+                    min: 0, max: 100,
+                    grid: { color: '#e2e5ea' },
+                    ticks: { color: '#6b7280', font: { size: 11 }, stepSize: 25, callback: v => v + '%' },
+                },
+            },
+        },
+    });
+}
+
+function _renderSeverityChart(totals) {
+    const ctx = document.getElementById('severity-chart');
+    if (!ctx) return;
+    if (_severityChart) { _severityChart.destroy(); _severityChart = null; }
+
+    _severityChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Critical', 'Serious', 'Moderate', 'Minor'],
+            datasets: [{
+                data: [totals.critical, totals.serious, totals.moderate, totals.minor],
+                backgroundColor: ['#dc2626', '#c2410c', '#d97706', '#2563eb'],
+                borderWidth: 0,
+                hoverOffset: 6,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#1a1d23', font: { size: 12 }, padding: 14,
+                        usePointStyle: true, pointStyleWidth: 10,
+                    },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: c => {
+                            const total = c.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total ? ((c.parsed / total) * 100).toFixed(1) : 0;
+                            return ` ${c.label}: ${c.parsed} (${pct}%)`;
+                        },
+                    },
+                },
+            },
+        },
+    });
 }

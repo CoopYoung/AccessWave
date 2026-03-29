@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - AccessWave</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
     <nav><div class="container">
@@ -27,6 +28,23 @@
             <div class="stat-card"><div class="label">Avg Score</div><div class="value" id="stat-score">--</div></div>
             <div class="stat-card"><div class="label">Total Issues</div><div class="value" id="stat-issues">--</div></div>
             <div class="stat-card"><div class="label">Critical</div><div class="value" id="stat-critical" style="color:var(--red)">--</div></div>
+        </div>
+
+        <div id="charts-section" hidden aria-label="Accessibility trend charts">
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2 class="chart-title">Score Trend</h2>
+                    <div class="chart-wrap">
+                        <canvas id="score-trend-chart" role="img" aria-label="Line chart showing accessibility scores over time per site"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h2 class="chart-title">Issue Severity</h2>
+                    <div class="chart-wrap chart-wrap-sm">
+                        <canvas id="severity-chart" role="img" aria-label="Doughnut chart showing total issues broken down by severity"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="main-content"><p style="color:var(--text-muted)">Loading...</p></div>

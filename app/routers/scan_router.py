@@ -74,6 +74,22 @@ class ScanSummary(BaseModel):
     critical_issues: int
 
 
+class ScanScorePoint(BaseModel):
+    date: str
+    score: float
+
+
+class SiteScoreHistory(BaseModel):
+    site_id: int
+    site_name: str
+    scans: list[ScanScorePoint]
+
+
+class ChartDataOut(BaseModel):
+    score_history: list[SiteScoreHistory]
+    severity_totals: dict[str, int]
+
+
 # --- Sites ---
 
 @router.get("/sites", response_model=list[SiteOut])
@@ -215,6 +231,48 @@ async def dashboard_stats(user: User = Depends(get_current_user), db: AsyncSessi
         total_sites=sites, total_scans=scans,
         avg_score=round(avg, 1) if avg else None,
         total_issues=total_issues, critical_issues=critical,
+    )
+
+
+@router.get("/dashboard/chart-data", response_model=ChartDataOut)
+async def dashboard_chart_data(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Score trend (per site, last 20 completed scans) + severity totals for charts."""
+    sites_result = await db.execute(select(Site).where(Site.user_id == user.id))
+    sites = sites_result.scalars().all()
+
+    score_history: list[SiteScoreHistory] = []
+    for site in sites:
+        scans_result = await db.execute(
+            select(Scan)
+            .where(Scan.site_id == site.id, Scan.status == "completed", Scan.score.isnot(None))
+            .order_by(Scan.completed_at.asc())
+            .limit(20)
+        )
+        scans = scans_result.scalars().all()
+        if scans:
+            score_history.append(SiteScoreHistory(
+                site_id=site.id,
+                site_name=site.name,
+                scans=[ScanScorePoint(date=s.completed_at.isoformat(), score=round(s.score, 1)) for s in scans],
+            ))
+
+    sev = (await db.execute(
+        select(
+            func.coalesce(func.sum(Scan.critical_count), 0).label("critical"),
+            func.coalesce(func.sum(Scan.serious_count), 0).label("serious"),
+            func.coalesce(func.sum(Scan.moderate_count), 0).label("moderate"),
+            func.coalesce(func.sum(Scan.minor_count), 0).label("minor"),
+        ).select_from(Scan).join(Site).where(Site.user_id == user.id, Scan.status == "completed")
+    )).one()
+
+    return ChartDataOut(
+        score_history=score_history,
+        severity_totals={
+            "critical": int(sev.critical),
+            "serious": int(sev.serious),
+            "moderate": int(sev.moderate),
+            "minor": int(sev.minor),
+        },
     )
 
 
