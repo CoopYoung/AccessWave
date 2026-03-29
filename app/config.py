@@ -63,6 +63,20 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     # "console" → human-readable coloured output (dev); "json" → JSON lines (production)
     LOG_FORMAT: str = os.getenv("LOG_FORMAT", "console")
+    # CORS — comma-separated list of allowed origins.
+    # Set to "*" only for fully public, read-only APIs.
+    # Default: the app's own BASE_URL so the frontend works out of the box.
+    CORS_ORIGINS: list[str] = [
+        o.strip()
+        for o in os.getenv("CORS_ORIGINS", os.getenv("BASE_URL", "http://localhost:8000")).split(",")
+        if o.strip()
+    ]
+
+    # Security headers
+    # Set HSTS_ENABLED=true only when the app is served over HTTPS in production.
+    HSTS_ENABLED: bool = os.getenv("HSTS_ENABLED", "false").lower() == "true"
+    # Optional URI for CSP violation reports (leave blank to omit the directive).
+    CSP_REPORT_URI: str = os.getenv("CSP_REPORT_URI", "")
 
 
 settings = Settings()
