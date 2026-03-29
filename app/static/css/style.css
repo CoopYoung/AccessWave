@@ -464,6 +464,7 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
     min-width: 34px;
     text-align: right;
 }
+.export-actions { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }

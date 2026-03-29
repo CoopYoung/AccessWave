@@ -85,6 +85,11 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>
     <script>if (window.hljs) hljs.configure({ languages: ['xml'] });</script>
+    <!-- jsPDF + autoTable: loaded async so they don't block page render.
+         exportPDF() checks window.jspdf before use and shows a friendly
+         "still loading" toast if the user clicks before the scripts arrive. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="/static/js/app.js"></script>
     <script>initDashboard();</script>
 </body>
