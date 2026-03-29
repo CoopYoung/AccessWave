@@ -501,6 +501,7 @@ let selectedSites = new Set();
 // Scan comparison state
 let compareMode = false;
 let compareSelected = []; // up to 2 scan ids
+let cachedStats = null;
 
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
@@ -633,6 +634,13 @@ async function loadStats() {
         document.getElementById('stat-score').textContent = s.avg_score !== null ? s.avg_score : '--';
         animateCounter(document.getElementById('stat-issues'), s.total_issues);
         animateCounter(document.getElementById('stat-critical'), s.critical_issues);
+        cachedStats = s;
+        document.getElementById('stat-sites').textContent = s.total_sites;
+        document.getElementById('stat-scans').textContent = s.total_scans;
+        document.getElementById('stat-score').textContent = s.avg_score !== null ? s.avg_score : '--';
+        document.getElementById('stat-issues').textContent = s.total_issues;
+        document.getElementById('stat-critical').textContent = s.critical_issues;
+        renderOnboardingChecklist(s);
     } catch (e) { console.error(e); }
         setStatVal('stat-sites', s.total_sites);
         setStatVal('stat-scans', s.total_scans);
@@ -652,7 +660,36 @@ async function loadSites() {
     try {
         const sites = await API.req('GET', '/sites');
         if (!sites?.length) {
-            el.innerHTML = `<div class="empty-state"><div class="icon">\uD83C\uDF10</div><p>No sites added yet</p><p style="font-size:0.88rem">Add your first website to scan for accessibility issues.</p></div>`;
+            el.innerHTML = `
+                <div class="onboarding-welcome" role="region" aria-label="Getting started with AccessWave">
+                    <div class="welcome-icon" aria-hidden="true">
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="20" cy="20" r="16" fill="var(--primary)" fill-opacity=".12"/>
+                            <circle cx="20" cy="20" r="12" stroke="var(--primary)" stroke-width="2" fill="none"/>
+                            <path d="M13 20l5 5 9-9" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h2>Welcome to AccessWave</h2>
+                    <p class="subtitle">Scan your websites for WCAG 2.1 accessibility issues and build a more inclusive web.</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('add-site-btn').click()">+ Add Your First Site</button>
+                    <div class="onboarding-steps" role="list" aria-label="How AccessWave works">
+                        <div class="onboarding-step" role="listitem">
+                            <div class="step-num" aria-hidden="true">1</div>
+                            <h4>Add a site</h4>
+                            <p>Enter your website URL to get started. We support any publicly accessible URL.</p>
+                        </div>
+                        <div class="onboarding-step" role="listitem">
+                            <div class="step-num" aria-hidden="true">2</div>
+                            <h4>Run a scan</h4>
+                            <p>AccessWave crawls your pages and checks them against WCAG 2.1 guidelines automatically.</p>
+                        </div>
+                        <div class="onboarding-step" role="listitem">
+                            <div class="step-num" aria-hidden="true">3</div>
+                            <h4>Fix issues</h4>
+                            <p>Review detailed reports with code snippets and step-by-step guidance for every issue.</p>
+                        </div>
+                    </div>
+                </div>`;
             return;
         }
         el.innerHTML = `<div class="sites-list">${sites.map(s => `
@@ -810,6 +847,36 @@ async function openSite(siteId) {
             el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
                 <div class="empty-state"><div class="icon">\uD83D\uDD0D</div><p>No scans yet for ${esc(site?.name || '')}</p>
                 <button class="btn btn-green" onclick="startScan(${siteId},this)">Run First Scan</button></div>`;
+            el.innerHTML = `
+                <a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
+                <div class="scan-empty" role="region" aria-label="No scans yet for ${esc(site?.name || 'this site')}">
+                    <div class="scan-icon" aria-hidden="true">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="14" cy="14" r="8" stroke="var(--blue)" stroke-width="2" fill="none"/>
+                            <path d="M20 20l6 6" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3>No scans yet for ${esc(site?.name || 'this site')}</h3>
+                    <p class="subtitle">Run your first scan to get an accessibility score and discover issues to fix.</p>
+                    <button class="btn btn-green" onclick="startScan(${siteId})">Run First Scan</button>
+                    <div class="scan-expectations" role="list" aria-label="What to expect from a scan">
+                        <div class="scan-expect-item" role="listitem">
+                            <div class="exp-icon" aria-hidden="true">🕷️</div>
+                            <strong>Crawls pages</strong>
+                            <p>Follows links from your homepage to discover all accessible pages.</p>
+                        </div>
+                        <div class="scan-expect-item" role="listitem">
+                            <div class="exp-icon" aria-hidden="true">♿</div>
+                            <strong>Checks WCAG 2.1</strong>
+                            <p>50+ rules covering contrast, semantics, keyboard navigation and more.</p>
+                        </div>
+                        <div class="scan-expect-item" role="listitem">
+                            <div class="exp-icon" aria-hidden="true">📊</div>
+                            <strong>Score 0–100</strong>
+                            <p>Get a clear accessibility score with issues ranked by severity.</p>
+                        </div>
+                    </div>
+                </div>`;
             return;
         }
         const completedScans = scans.filter(s => s.status === 'completed');
@@ -1158,10 +1225,51 @@ function showComparisonModal(r) {
     document.body.appendChild(modal);
     // Focus the close button for accessibility
     modal.querySelector('button[aria-label="Close comparison"]')?.focus();
+function renderOnboardingChecklist(stats) {
+    const banner = document.getElementById('onboarding-banner');
+    if (!banner) return;
+    if (localStorage.getItem('aw_onboarding_dismissed')) { banner.innerHTML = ''; return; }
+    const steps = [
+        { label: 'Create your account', done: true },
+        { label: 'Add your first site', done: (stats?.total_sites || 0) > 0 },
+        { label: 'Run your first scan', done: (stats?.total_scans || 0) > 0 },
+        { label: 'Review accessibility issues', done: localStorage.getItem('aw_reviewed_scan') === '1' },
+    ];
+    const doneCount = steps.filter(s => s.done).length;
+    if (doneCount === steps.length) { localStorage.setItem('aw_onboarding_dismissed', '1'); banner.innerHTML = ''; return; }
+    const pct = Math.round((doneCount / steps.length) * 100);
+    banner.innerHTML = `
+        <div class="onboarding-checklist" role="region" aria-label="Getting started checklist">
+            <div class="checklist-header">
+                <div>
+                    <h3>Getting started</h3>
+                    <p class="checklist-sub">${doneCount} of ${steps.length} steps complete</p>
+                </div>
+                <button class="dismiss-btn" onclick="dismissOnboarding()" aria-label="Dismiss getting started checklist" title="Dismiss">&#x2715;</button>
+            </div>
+            <ul class="checklist-items" role="list">
+                ${steps.map(s => `
+                <li class="checklist-item${s.done ? ' done' : ''}" role="listitem">
+                    <div class="check" aria-hidden="true">${s.done ? '&#x2713;' : ''}</div>
+                    <span class="check-text">${esc(s.label)}</span>
+                </li>`).join('')}
+            </ul>
+            <div class="checklist-progress" role="progressbar" aria-valuenow="${doneCount}" aria-valuemin="0" aria-valuemax="${steps.length}" aria-label="Onboarding progress: ${doneCount} of ${steps.length} complete">
+                <div class="checklist-progress-bar" style="width:${pct}%"></div>
+            </div>
+        </div>`;
+}
+
+function dismissOnboarding() {
+    localStorage.setItem('aw_onboarding_dismissed', '1');
+    const banner = document.getElementById('onboarding-banner');
+    if (banner) banner.innerHTML = '';
 }
 
 async function openScan(scanId) {
     currentScanId = scanId;
+    localStorage.setItem('aw_reviewed_scan', '1');
+    if (cachedStats) renderOnboardingChecklist(cachedStats);
     const el = document.getElementById('main-content');
     el.innerHTML = `
         <a href="#" class="back-link" onclick="openSite(${currentSiteId});return false">&larr; Back to scans</a>
