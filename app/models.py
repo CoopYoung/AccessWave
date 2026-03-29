@@ -16,6 +16,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+    webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")
 
 
 class Site(Base):
@@ -80,3 +81,18 @@ class ApiKey(Base):
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     user = relationship("User", back_populates="api_keys")
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # Optional: scope to one site. NULL means fire for all sites owned by this user.
+    site_id = Column(Integer, ForeignKey("sites.id", ondelete="CASCADE"), nullable=True, index=True)
+    url = Column(String(2048), nullable=False)
+    # HMAC-SHA256 secret used to sign payloads (stored as plaintext — user needs it)
+    secret = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    user = relationship("User", back_populates="webhooks")
+    site = relationship("Site")
