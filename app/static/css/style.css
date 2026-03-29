@@ -15,6 +15,13 @@ html[data-theme="dark"] {
     --amber: #fbbf24; --amber-light: #251d05; --blue: #60a5fa; --blue-light: #0f1d33;
     --serious: #fb923c; --serious-light: #2a1500;
     color-scheme: dark;
+    /* Activity heatmap score colours */
+    --heatmap-empty: #ebedf0;
+    --heatmap-bad:  #fca5a5;
+    --heatmap-warn: #fbbf24;
+    --heatmap-ok:   #6ee7b7;
+    --heatmap-good: #10b981;
+    --heatmap-great:#047857;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -752,6 +759,17 @@ kbd {
 .rule-fixed { background: var(--green-light); color: var(--green); }
 .rule-new { background: var(--red-light); color: var(--red); }
 .compare-rules-empty { color: var(--text-dim); font-size: 0.85rem; font-style: italic; }
+/* Activity heatmap calendar */
+.section-title { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+.activity-section { margin-bottom: 28px; }
+.heatmap-wrap { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px 20px 14px; }
+.heatmap-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.heatmap-scroll svg { display: block; }
+.heatmap-legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; justify-content: flex-end; font-size: 0.78rem; color: var(--text-dim); flex-wrap: wrap; }
+.legend-cells { display: flex; gap: 2px; align-items: center; }
+.legend-cell { width: 11px; height: 11px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+.heatmap-tooltip { position: absolute; background: var(--text); color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 0.78rem; pointer-events: none; z-index: 20; white-space: nowrap; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.heatmap-tooltip[hidden] { display: none; }
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }

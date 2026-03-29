@@ -564,6 +564,7 @@ async function initDashboard() {
     }
     await loadStats();
     await Promise.all([loadSites(), loadCharts()]);
+    await Promise.all([loadSites(), loadActivityHeatmap()]);
 }
 
 function setStatVal(id, val) {
@@ -2056,4 +2057,164 @@ async function revokeShareLink(scanId) {
         input.value = '';
         showToast('Share link revoked.', 'info');
     } catch (e) { showToast(e.message, 'error'); }
+// --- Activity Heatmap ---
+
+async function loadActivityHeatmap() {
+    const container = document.getElementById('heatmap-container');
+    if (!container) return;
+    try {
+        const data = await API.req('GET', '/dashboard/activity');
+        if (!data) return;
+        renderActivityHeatmap(container, data);
+    } catch (e) {
+        console.error('Heatmap error:', e);
+    }
+}
+
+function renderActivityHeatmap(container, activityData) {
+    const dateMap = {};
+    activityData.forEach(d => { dateMap[d.date] = d; });
+
+    const CELL = 12, GAP = 3, S = CELL + GAP;
+    const DL = 30;   // left margin for day-of-week labels
+    const MT = 22;   // top margin for month labels
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+
+    // Start at the Sunday 52 weeks before today
+    const start = new Date(today);
+    start.setDate(start.getDate() - 52 * 7);
+    start.setDate(start.getDate() - start.getDay());
+
+    // How many full weeks from start to the Saturday on or after today
+    const endSat = new Date(today);
+    endSat.setDate(endSat.getDate() + (6 - endSat.getDay()));
+    const numWeeks = Math.round((endSat - start) / (7 * 86400000)) + 1;
+
+    const W = DL + numWeeks * S;
+    const H = MT + 7 * S - GAP;
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Scan activity heatmap for the last 52 weeks. Each cell is one day, coloured by average accessibility score.');
+
+    // Day-of-week labels: Mon, Wed, Fri (rows 1, 3, 5)
+    [['Mon', 1], ['Wed', 3], ['Fri', 5]].forEach(([label, row]) => {
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('x', DL - 4);
+        t.setAttribute('y', MT + row * S + CELL - 1);
+        t.setAttribute('text-anchor', 'end');
+        t.setAttribute('font-size', '9');
+        t.setAttribute('fill', 'var(--text-dim)');
+        t.setAttribute('aria-hidden', 'true');
+        t.textContent = label;
+        svg.appendChild(t);
+    });
+
+    const seenMonths = new Set();
+
+    for (let week = 0; week < numWeeks; week++) {
+        for (let dow = 0; dow < 7; dow++) {
+            const cellDate = new Date(start);
+            cellDate.setDate(start.getDate() + week * 7 + dow);
+            if (cellDate > today) continue;
+
+            const iso = cellDate.toISOString().slice(0, 10);
+            const entry = dateMap[iso];
+
+            // Month label on first of month (or very first cell)
+            const monthKey = iso.slice(0, 7);
+            if ((cellDate.getDate() === 1 || (week === 0 && dow === 0)) && !seenMonths.has(monthKey)) {
+                seenMonths.add(monthKey);
+                const t = document.createElementNS(NS, 'text');
+                t.setAttribute('x', DL + week * S);
+                t.setAttribute('y', MT - 6);
+                t.setAttribute('font-size', '10');
+                t.setAttribute('fill', 'var(--text-muted)');
+                t.setAttribute('aria-hidden', 'true');
+                t.textContent = MONTHS[cellDate.getMonth()];
+                svg.appendChild(t);
+            }
+
+            const x = DL + week * S;
+            const y = MT + dow * S;
+
+            const scanText = !entry ? 'No scans'
+                : entry.count === 1 ? '1 scan' : `${entry.count} scans`;
+            const scoreText = entry?.avg_score != null ? `, avg score ${entry.avg_score}` : '';
+            const tipText = `${iso}: ${scanText}${scoreText}`;
+
+            const rect = document.createElementNS(NS, 'rect');
+            rect.setAttribute('x', x);
+            rect.setAttribute('y', y);
+            rect.setAttribute('width', CELL);
+            rect.setAttribute('height', CELL);
+            rect.setAttribute('rx', '2');
+            rect.setAttribute('ry', '2');
+            rect.setAttribute('fill', heatmapColor(entry));
+            rect.setAttribute('aria-label', tipText);
+            rect.setAttribute('tabindex', '0');
+            rect.setAttribute('role', 'gridcell');
+            rect.dataset.tip = tipText;
+            if (entry) rect.style.cursor = 'pointer';
+            svg.appendChild(rect);
+        }
+    }
+
+    // Floating tooltip
+    const tip = document.createElement('div');
+    tip.className = 'heatmap-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.setAttribute('aria-live', 'polite');
+    tip.hidden = true;
+
+    container.style.position = 'relative';
+
+    svg.addEventListener('mousemove', e => {
+        const r = e.target;
+        if (r.tagName !== 'rect' || !r.dataset.tip) { tip.hidden = true; return; }
+        tip.hidden = false;
+        tip.textContent = r.dataset.tip;
+        const cRect = container.getBoundingClientRect();
+        let left = e.clientX - cRect.left + 12;
+        const top = e.clientY - cRect.top - 34;
+        // Clamp so tooltip doesn't overflow right edge
+        if (left + tip.offsetWidth + 8 > container.offsetWidth) left = e.clientX - cRect.left - tip.offsetWidth - 8;
+        tip.style.left = Math.max(0, left) + 'px';
+        tip.style.top = top + 'px';
+    });
+    svg.addEventListener('mouseleave', () => { tip.hidden = true; });
+
+    // Keyboard focus: show tooltip above focused cell
+    svg.addEventListener('focusin', e => {
+        const r = e.target;
+        if (r.tagName !== 'rect' || !r.dataset.tip) return;
+        tip.hidden = false;
+        tip.textContent = r.dataset.tip;
+        const rRect = r.getBoundingClientRect();
+        const cRect = container.getBoundingClientRect();
+        tip.style.left = (rRect.left - cRect.left) + 'px';
+        tip.style.top = Math.max(0, rRect.top - cRect.top - 34) + 'px';
+    });
+    svg.addEventListener('focusout', () => { tip.hidden = true; });
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+    container.appendChild(tip);
+}
+
+function heatmapColor(entry) {
+    if (!entry || entry.count === 0) return 'var(--heatmap-empty)';
+    if (entry.avg_score === null) return '#bfdbfe'; // blue-200: scanned but score unknown
+    const s = entry.avg_score;
+    if (s >= 90) return 'var(--heatmap-great)';
+    if (s >= 70) return 'var(--heatmap-good)';
+    if (s >= 50) return 'var(--heatmap-ok)';
+    if (s >= 30) return 'var(--heatmap-warn)';
+    return 'var(--heatmap-bad)';
 }

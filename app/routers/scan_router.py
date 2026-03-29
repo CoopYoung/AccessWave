@@ -191,6 +191,10 @@ class PublicScanOut(BaseModel):
     minor_count: int
     score: float | None
     completed_at: datetime.datetime | None
+class ActivityDay(BaseModel):
+    date: str          # YYYY-MM-DD
+    count: int
+    avg_score: float | None
 
 
 # --- Sites ---
@@ -598,6 +602,37 @@ def _badge_svg(label: str, value: str, color: str) -> str:
         f'</g>'
         f'</svg>'
     )
+@router.get("/dashboard/activity", response_model=list[ActivityDay])
+async def dashboard_activity(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily scan activity for the last 53 weeks, used by the heatmap calendar."""
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(weeks=53)
+    result = await db.execute(
+        select(
+            func.strftime("%Y-%m-%d", Scan.completed_at).label("day"),
+            func.count(Scan.id).label("scan_count"),
+            func.avg(Scan.score).label("avg_score"),
+        )
+        .join(Site)
+        .where(
+            Site.user_id == user.id,
+            Scan.status == "completed",
+            Scan.completed_at >= cutoff,
+        )
+        .group_by(func.strftime("%Y-%m-%d", Scan.completed_at))
+        .order_by(func.strftime("%Y-%m-%d", Scan.completed_at))
+    )
+    rows = result.all()
+    return [
+        ActivityDay(
+            date=str(row.day),
+            count=row.scan_count,
+            avg_score=round(row.avg_score, 1) if row.avg_score is not None else None,
+        )
+        for row in rows
+    ]
 
 
 # --- Helpers ---
