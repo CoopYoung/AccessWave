@@ -22,6 +22,7 @@ from app.routers import auth_router, billing_router, health_router, scan_router
 from app.logging_config import configure_logging
 from app.routers import auth_router, billing_router, scan_router
 from app.security_headers import SecurityHeadersMiddleware
+from app.routers import api_keys_router
 
 configure_logging(log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
 logger = structlog.get_logger("accesswave")
@@ -72,6 +73,7 @@ app.include_router(health_router.router)
 app.include_router(auth_router.router)
 app.include_router(scan_router.router)
 app.include_router(billing_router.router)
+app.include_router(api_keys_router.router)
 
 # Instrument all HTTP endpoints and expose /metrics in Prometheus text format.
 # The instrumentator collects: request count, request duration, response size,
@@ -122,3 +124,6 @@ async def register_page(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
+@app.get("/api-keys", response_class=HTMLResponse)
+async def api_keys_page(request: Request):
+    return templates.TemplateResponse("api_keys.html", {"request": request})

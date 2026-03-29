@@ -14,6 +14,7 @@ class User(Base):
     stripe_subscription_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
+    api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
 
 
 class Site(Base):
@@ -59,3 +60,18 @@ class Issue(Base):
     selector = Column(String(500), nullable=True)
     how_to_fix = Column(Text, nullable=True)
     scan = relationship("Scan", back_populates="issues")
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    # First 11 chars of the raw key (e.g. "aw_abc12345") shown in UI after creation
+    key_prefix = Column(String(12), nullable=False)
+    # SHA-256 hex digest of the full raw key — never stored in plaintext
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    user = relationship("User", back_populates="api_keys")

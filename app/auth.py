@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -7,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import ApiKey, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
@@ -25,11 +26,33 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode({"sub": str(user_id), "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+async def _resolve_api_key(token: str, db: AsyncSession) -> User:
+    """Authenticate via a raw API key (starts with 'aw_')."""
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    result = await db.execute(select(ApiKey).where(ApiKey.key_hash == digest))
+    api_key = result.scalar_one_or_none()
+    if api_key is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+    if api_key.expires_at and api_key.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key has expired")
+    # Update last_used_at without blocking the request
+    api_key.last_used_at = datetime.utcnow()
+    await db.commit()
+    user_result = await db.execute(select(User).where(User.id == api_key.user_id))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
 async def get_current_user(
     token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db),
 ) -> User:
     if token is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    # API keys are prefixed with "aw_"; everything else is treated as a JWT
+    if token.startswith("aw_"):
+        return await _resolve_api_key(token, db)
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = int(payload["sub"])
