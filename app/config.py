@@ -1,11 +1,38 @@
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
+def _normalise_db_url(url: str) -> str:
+    """Canonicalise a database URL so it always uses an async driver.
+
+    Many PaaS providers (Heroku, Railway, Render) emit bare ``postgres://`` or
+    ``postgresql://`` URLs.  SQLAlchemy's async engine requires the asyncpg
+    driver variant, so we rewrite those on the way in rather than requiring
+    every deployment to remember the exact scheme.
+    """
+    # postgres:// → postgresql+asyncpg://
+    url = re.sub(r"^postgres://", "postgresql+asyncpg://", url)
+    # postgresql:// (no driver) → postgresql+asyncpg://
+    url = re.sub(r"^postgresql://", "postgresql+asyncpg://", url)
+    return url
+
+
 class Settings:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./accesswave.db")
+    DATABASE_URL: str = _normalise_db_url(
+        os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./accesswave.db")
+    )
+
+    @property
+    def db_dialect(self) -> str:
+        """Return the SQLAlchemy dialect name, e.g. ``'sqlite'`` or ``'postgresql'``."""
+        return self.DATABASE_URL.split("+")[0].split(":")[0]
+
+    # PostgreSQL connection-pool tuning (ignored for SQLite)
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
