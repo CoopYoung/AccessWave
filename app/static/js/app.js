@@ -159,6 +159,37 @@ function initReveal() {
 // Auto-init reveal on every page load
 document.addEventListener('DOMContentLoaded', initReveal);
 
+// Skeleton helpers
+function skSiteCards(n) {
+    return Array.from({length: n}, () => `
+        <div class="site-card" aria-hidden="true" style="pointer-events:none">
+            <div class="site-info">
+                <div class="sk" style="width:56px;height:56px;border-radius:50%;flex-shrink:0"></div>
+                <div style="display:flex;flex-direction:column;gap:8px;flex:1">
+                    <div class="sk" style="height:14px;width:50%"></div>
+                    <div class="sk" style="height:11px;width:35%"></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px">
+                <div class="sk" style="height:32px;width:84px;border-radius:8px"></div>
+                <div class="sk" style="height:32px;width:68px;border-radius:8px"></div>
+            </div>
+        </div>`).join('');
+}
+
+function skIssueCards(n) {
+    const w = [75, 65, 80, 60];
+    return Array.from({length: n}, (_, i) => `
+        <div class="issue-card" aria-hidden="true">
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+                <div class="sk" style="height:22px;width:72px;border-radius:100px"></div>
+                <div class="sk" style="height:22px;width:88px"></div>
+            </div>
+            <div class="sk" style="height:14px;width:${w[i % 4]}%;margin-bottom:8px"></div>
+            <div class="sk" style="height:11px;width:${w[(i + 2) % 4] - 20}%"></div>
+        </div>`).join('');
+}
+
 // Auth
 function initAuth(type) {
     if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
@@ -166,7 +197,10 @@ function initAuth(type) {
     if (!form) return;
     form.addEventListener('submit', async (e) => {
         e.preventDefault(); err.style.display = 'none';
-        const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+        const btn = form.querySelector('button[type=submit]');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner" aria-hidden="true"></span>${type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026'}`;
         try {
             let data;
             if (type === 'register') {
@@ -177,7 +211,7 @@ function initAuth(type) {
                 if (!r.ok) throw new Error(data.detail || 'Login failed');
             }
             API.setToken(data.access_token); window.location.href = '/dashboard';
-        } catch (e) { err.textContent = e.message; err.style.display = 'block'; btn.disabled = false; }
+        } catch (e) { err.textContent = e.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = origText; }
     });
 }
 
@@ -203,7 +237,16 @@ async function initDashboard() {
     await Promise.all([loadSites(), loadCharts()]);
 }
 
+function setStatVal(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('sk');
+    el.textContent = val;
+}
+
 async function loadStats() {
+    const ids = ['stat-sites', 'stat-scans', 'stat-score', 'stat-issues', 'stat-critical'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('sk'); });
     try {
         const s = await API.req('GET', '/dashboard/stats');
         if (!s) return;
@@ -213,10 +256,17 @@ async function loadStats() {
         animateCounter(document.getElementById('stat-issues'), s.total_issues);
         animateCounter(document.getElementById('stat-critical'), s.critical_issues);
     } catch (e) { console.error(e); }
+        setStatVal('stat-sites', s.total_sites);
+        setStatVal('stat-scans', s.total_scans);
+        setStatVal('stat-score', s.avg_score !== null ? s.avg_score : '--');
+        setStatVal('stat-issues', s.total_issues);
+        setStatVal('stat-critical', s.critical_issues);
+    } catch (e) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('sk'); }); console.error(e); }
 }
 
 async function loadSites() {
     const el = document.getElementById('main-content');
+    el.innerHTML = `<div class="sites-list" aria-busy="true" aria-label="Loading sites">${skSiteCards(3)}</div>`;
     try {
         const sites = await API.req('GET', '/sites');
         if (!sites?.length) {
@@ -233,6 +283,7 @@ async function loadSites() {
                     <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})">Scan Now</button>
                     <button class="btn btn-sm btn-edit" aria-label="Edit ${esc(s.name)}" onclick="event.stopPropagation();openEditSite(${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.url).replace(/'/g,"\\'")}')">Edit</button>
+                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id},this)">Scan Now</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
                 </div>
             </div>`).join('')}</div>`;
@@ -242,7 +293,8 @@ async function loadSites() {
 async function openSite(siteId) {
     currentSiteId = siteId;
     const el = document.getElementById('main-content');
-    el.innerHTML = '<p style="color:var(--text-muted)">Loading scans...</p>';
+    el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
+        <div class="sites-list" aria-busy="true" aria-label="Loading scans">${skSiteCards(3)}</div>`;
     try {
         const scans = await API.req('GET', `/sites/${siteId}/scans`);
         const sites = await API.req('GET', '/sites');
@@ -250,7 +302,7 @@ async function openSite(siteId) {
         if (!scans?.length) {
             el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
                 <div class="empty-state"><div class="icon">\uD83D\uDD0D</div><p>No scans yet for ${esc(site?.name || '')}</p>
-                <button class="btn btn-green" onclick="startScan(${siteId})">Run First Scan</button></div>`;
+                <button class="btn btn-green" onclick="startScan(${siteId},this)">Run First Scan</button></div>`;
             return;
         }
         el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
@@ -277,7 +329,20 @@ async function openSite(siteId) {
 async function openScan(scanId) {
     currentScanId = scanId;
     const el = document.getElementById('main-content');
-    el.innerHTML = '<p style="color:var(--text-muted)">Loading issues...</p>';
+    el.innerHTML = `
+        <a href="#" class="back-link" onclick="openSite(${currentSiteId});return false">&larr; Back to scans</a>
+        <div class="scan-detail" aria-busy="true" style="margin-bottom:20px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <div class="sk" style="height:22px;width:120px"></div>
+                <div class="sk" style="width:64px;height:64px;border-radius:50%"></div>
+            </div>
+            <div class="sk" style="height:13px;width:55%;margin-bottom:14px"></div>
+            <div style="display:flex;gap:10px">
+                ${Array.from({length: 4}, () => `<div class="sk" style="height:32px;width:90px;border-radius:8px"></div>`).join('')}
+            </div>
+        </div>
+        <div class="sk" style="height:18px;width:130px;margin-bottom:12px"></div>
+        <div class="issues-list" aria-busy="true" aria-label="Loading issues">${skIssueCards(4)}</div>`;
     try {
         const [scan, issues] = await Promise.all([
             API.req('GET', `/scans/${scanId}`),
@@ -317,27 +382,77 @@ async function openScan(scanId) {
 async function addSite(e) {
     e.preventDefault();
     const form = e.target;
+    const btn = form.querySelector('button[type=submit]');
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Adding\u2026';
     try {
         await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
         document.getElementById('add-modal').classList.remove('active');
         form.reset();
         showToast('Site added');
         await Promise.all([loadStats(), loadSites()]);
-    } catch (e) { showToast(e.message, 'error'); }
+    } catch (e) {
+        showToast(e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
 }
 
-async function startScan(siteId) {
+async function startScan(siteId, btn) {
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Scanning\u2026';
+    }
+
+    // Inject a live progress banner at top of main-content
+    const banner = document.createElement('div');
+    banner.className = 'scan-progress';
+    banner.setAttribute('role', 'status');
+    banner.setAttribute('aria-live', 'polite');
+    banner.setAttribute('aria-label', 'Scan in progress');
+    banner.innerHTML = `
+        <span class="sp-text"><span class="spinner" aria-hidden="true"></span>Scanning\u2026</span>
+        <div class="scan-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Scan progress">
+            <div class="scan-progress-bar" style="width:0%"></div>
+        </div>
+        <span class="sp-pct" aria-hidden="true">0%</span>`;
+    document.getElementById('main-content').prepend(banner);
+
+    let pct = 0;
+    const iv = setInterval(() => {
+        pct = Math.min(pct + Math.random() * 4 + 1.5, 90);
+        const bar = banner.querySelector('.scan-progress-bar');
+        const track = banner.querySelector('[role=progressbar]');
+        const pctEl = banner.querySelector('.sp-pct');
+        if (bar) bar.style.width = pct.toFixed(0) + '%';
+        if (track) track.setAttribute('aria-valuenow', pct.toFixed(0));
+        if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
+    }, 500);
+
     try {
-        const scan = await API.req('POST', `/sites/${siteId}/scan`);
-        showToast('Scan started! Refresh in a few seconds to see results.');
-        // Poll for completion
+        await API.req('POST', `/sites/${siteId}/scan`);
+        showToast('Scan started!');
         setTimeout(async () => {
+            clearInterval(iv);
+            const bar = banner.querySelector('.scan-progress-bar');
+            const track = banner.querySelector('[role=progressbar]');
+            const pctEl = banner.querySelector('.sp-pct');
+            if (bar) bar.style.width = '100%';
+            if (track) track.setAttribute('aria-valuenow', '100');
+            if (pctEl) pctEl.textContent = '100%';
             await loadStats();
             await loadCharts();
             if (currentSiteId === siteId) await openSite(siteId);
             else await loadSites();
+            banner.remove();
         }, 8000);
-    } catch (e) { showToast(e.message, 'error'); }
+    } catch (e) {
+        clearInterval(iv);
+        banner.remove();
+        if (btn) { btn.disabled = false; btn.textContent = 'Scan Now'; }
+        showToast(e.message, 'error');
+    }
 }
 
 async function deleteSite(siteId) {
