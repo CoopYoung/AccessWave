@@ -565,6 +565,8 @@ async function initDashboard() {
     await loadStats();
     await Promise.all([loadSites(), loadCharts()]);
     await Promise.all([loadSites(), loadActivityHeatmap()]);
+    await loadSites();
+    initWcagPanel();
 }
 
 function setStatVal(id, val) {
@@ -1399,7 +1401,7 @@ async function openScan(scanId) {
                 <div class="issue-card">
                     <div class="issue-header">
                         <span class="badge badge-${i.severity}">${i.severity}</span>
-                        ${i.wcag_criteria ? `<span class="wcag">WCAG ${i.wcag_criteria}</span>` : ''}
+                        ${i.wcag_criteria ? `<button class="wcag-btn" onclick="window._wcagPanelTrigger=this;openWcagPanel('${esc(i.wcag_criteria)}')" aria-label="Open WCAG ${esc(i.wcag_criteria)} reference">WCAG ${esc(i.wcag_criteria)}</button>` : ''}
                         <span style="color:var(--text-dim);font-size:0.82rem">${i.rule_id}</span>
                     </div>
                     <div class="issue-message">${esc(i.message)}</div>
@@ -2217,4 +2219,388 @@ function heatmapColor(entry) {
     if (s >= 50) return 'var(--heatmap-ok)';
     if (s >= 30) return 'var(--heatmap-warn)';
     return 'var(--heatmap-bad)';
+// --- WCAG 2.1 Reference Panel ---
+
+const WCAG_CRITERIA = {
+    '1.1.1': {
+        title: 'Non-text Content',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'All non-text content that is presented to the user has a text alternative that serves the equivalent purpose.',
+        why: 'Screen readers cannot interpret images, icons, or other non-text elements without a text description. Users who are blind or have low vision rely on alt text to understand the meaning of images.',
+        techniques: [
+            'Add descriptive alt attributes to all <img> elements',
+            'Use alt="" for decorative images (empty alt, not missing)',
+            'Provide text alternatives for icons (aria-label or visually hidden text)',
+            'Use <title> elements inside <svg> for vector graphics',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/non-text-content',
+    },
+    '1.2.1': {
+        title: 'Audio-only and Video-only (Prerecorded)',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'For prerecorded audio-only and video-only media, a text alternative provides equivalent information.',
+        why: 'Users who are deaf or hard of hearing cannot access audio content. Users who are blind need a text description of video-only content.',
+        techniques: [
+            'Provide a text transcript for all audio-only content',
+            'Provide a text description for all video-only (silent) content',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/audio-only-and-video-only-prerecorded',
+    },
+    '1.2.2': {
+        title: 'Captions (Prerecorded)',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'Captions are provided for all prerecorded audio content in synchronized media, except when the media is a text alternative for text.',
+        why: 'Captions allow users who are deaf or hard of hearing to access the spoken content in videos.',
+        techniques: [
+            'Use <track kind="captions"> on <video> elements',
+            'Provide a WebVTT caption file',
+            'Ensure captions include all spoken dialogue and important sound effects',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/captions-prerecorded',
+    },
+    '1.3.1': {
+        title: 'Info and Relationships',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text.',
+        why: 'Assistive technologies need semantic markup to understand the structure of content. Visual layout alone is not sufficient.',
+        techniques: [
+            'Use proper heading hierarchy (h1–h6)',
+            'Use <ul>, <ol>, <dl> for lists',
+            'Use <table> with <th scope> for tabular data',
+            'Use <label> elements associated with form inputs',
+            'Use ARIA roles and properties where native HTML is insufficient',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships',
+    },
+    '1.3.2': {
+        title: 'Meaningful Sequence',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'If the sequence in which content is presented affects its meaning, a correct reading sequence can be programmatically determined.',
+        why: 'Screen readers and other assistive technologies follow the DOM order. Content that depends on visual layout for meaning can be confusing when read linearly.',
+        techniques: [
+            'Ensure the DOM order matches the intended reading order',
+            'Avoid using CSS to place content visually in a different order from DOM order',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/meaningful-sequence',
+    },
+    '1.3.3': {
+        title: 'Sensory Characteristics',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'Instructions provided for understanding and operating content do not rely solely on sensory characteristics such as shape, colour, size, visual location, orientation, or sound.',
+        why: 'Not all users can perceive the same sensory information. Instructions like "click the green button on the right" exclude users who are colour-blind or using a screen reader.',
+        techniques: [
+            'Supplement visual descriptions with text labels (e.g. "Submit button (green, top-right)")',
+            'Do not use colour alone to identify controls',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/sensory-characteristics',
+    },
+    '1.4.1': {
+        title: 'Use of Color',
+        level: 'A',
+        principle: 'Perceivable',
+        description: 'Color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element.',
+        why: 'Approximately 8% of men have some form of colour blindness. Using colour as the sole indicator (e.g. red = error) excludes these users.',
+        techniques: [
+            'Add text labels, icons, or patterns alongside colour coding',
+            'Use underlines for links in addition to colour',
+            'Provide both colour and texture in charts/graphs',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/use-of-color',
+    },
+    '1.4.3': {
+        title: 'Contrast (Minimum)',
+        level: 'AA',
+        principle: 'Perceivable',
+        description: 'The visual presentation of text and images of text has a contrast ratio of at least 4.5:1, except for large text (3:1), incidental text, or logotypes.',
+        why: 'Low contrast makes text difficult or impossible to read for users with low vision, colour blindness, or in challenging viewing conditions (e.g. sunlight).',
+        techniques: [
+            'Use a contrast checker tool (e.g. WebAIM Contrast Checker)',
+            'Ensure normal text meets 4.5:1 contrast ratio',
+            'Ensure large text (18pt / 14pt bold) meets 3:1 contrast ratio',
+            'Avoid light grey text on white backgrounds',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum',
+    },
+    '1.4.4': {
+        title: 'Resize Text',
+        level: 'AA',
+        principle: 'Perceivable',
+        description: 'Text can be resized without assistive technology up to 200 percent without loss of content or functionality.',
+        why: 'Users with low vision may enlarge text using browser zoom. Pages must not break or hide content when text is enlarged.',
+        techniques: [
+            'Use relative units (em, rem, %) instead of fixed pixel sizes',
+            'Test the page at 200% browser zoom',
+            'Avoid overflow:hidden on containers with text',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/resize-text',
+    },
+    '1.4.5': {
+        title: 'Images of Text',
+        level: 'AA',
+        principle: 'Perceivable',
+        description: 'If the technologies being used can achieve the visual presentation, text is used to convey information rather than images of text.',
+        why: 'Images of text cannot be resized, reflowed, or adapted by assistive technologies. Real text is far more accessible and flexible.',
+        techniques: [
+            'Replace images of text with actual HTML text styled with CSS',
+            'Use web fonts for branded typography instead of images',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/images-of-text',
+    },
+    '2.1.1': {
+        title: 'Keyboard',
+        level: 'A',
+        principle: 'Operable',
+        description: 'All functionality of the content is operable through a keyboard interface without requiring specific timings for individual keystrokes.',
+        why: 'Many users cannot use a mouse due to motor disabilities. All interactive functionality must be reachable and operable using only the keyboard.',
+        techniques: [
+            'Ensure all interactive elements are focusable (buttons, links, inputs, selects)',
+            'Implement keyboard event handlers alongside mouse handlers',
+            'Custom widgets must support keyboard interaction patterns (ARIA Authoring Practices)',
+            'Avoid mouse-only events like mouseover for essential functionality',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/keyboard',
+    },
+    '2.1.2': {
+        title: 'No Keyboard Trap',
+        level: 'A',
+        principle: 'Operable',
+        description: 'If keyboard focus can be moved to a component using a keyboard interface, focus can be moved away from that component using only a keyboard interface.',
+        why: 'If focus becomes trapped in a widget (like a poorly implemented modal), keyboard-only users cannot navigate away and are stuck.',
+        techniques: [
+            'Ensure all modal dialogs have a close button reachable by keyboard',
+            'Return focus to the triggering element when a dialog closes',
+            'Test all interactive widgets by tabbing through the entire page',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/no-keyboard-trap',
+    },
+    '2.4.1': {
+        title: 'Bypass Blocks',
+        level: 'A',
+        principle: 'Operable',
+        description: 'A mechanism is available to bypass blocks of content that are repeated on multiple Web pages.',
+        why: 'Keyboard users must tab through all content in order. Without a skip link, users must navigate through the entire navigation bar on every page before reaching the main content.',
+        techniques: [
+            'Add a "Skip to main content" link as the first focusable element',
+            'Use <main>, <nav>, <header>, <aside> landmarks',
+            'Provide a mechanism to skip repeated navigation',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/bypass-blocks',
+    },
+    '2.4.2': {
+        title: 'Page Titled',
+        level: 'A',
+        principle: 'Operable',
+        description: 'Web pages have titles that describe topic or purpose.',
+        why: 'Page titles are the first thing announced by screen readers when loading a page. A descriptive title helps users quickly understand where they are.',
+        techniques: [
+            'Ensure every page has a unique, descriptive <title> element',
+            'Format: "Page Name – Site Name" is a common convention',
+            'Dynamically update the title when content changes in SPAs',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/page-titled',
+    },
+    '2.4.3': {
+        title: 'Focus Order',
+        level: 'A',
+        principle: 'Operable',
+        description: 'If a Web page can be navigated sequentially and the navigation sequences affect meaning or operation, focusable components receive focus in an order that preserves meaning and operation.',
+        why: 'The Tab key order should follow the logical visual flow of content. An unexpected focus order is confusing and disorienting for keyboard and screen reader users.',
+        techniques: [
+            'Ensure DOM order matches the logical reading/tab order',
+            'Avoid positive tabindex values',
+            'Move focus programmatically to newly opened modals, dialogs, or alerts',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/focus-order',
+    },
+    '2.4.4': {
+        title: 'Link Purpose (In Context)',
+        level: 'A',
+        principle: 'Operable',
+        description: 'The purpose of each link can be determined from the link text alone, or from the link text together with its programmatically determined link context.',
+        why: 'Screen reader users often navigate by listing all links on a page. Links like "click here" or "read more" provide no context outside their surrounding text.',
+        techniques: [
+            'Write descriptive link text: "Read our accessibility guide" not "Read more"',
+            'Use aria-label or aria-describedby to provide additional context',
+            'Avoid duplicate link text that leads to different destinations',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/link-purpose-in-context',
+    },
+    '2.4.6': {
+        title: 'Headings and Labels',
+        level: 'AA',
+        principle: 'Operable',
+        description: 'Headings and labels describe topic or purpose.',
+        why: 'Screen reader users navigate by headings. Vague headings like "Section 1" or form labels like "Field 1" provide no useful information.',
+        techniques: [
+            'Use descriptive, unique heading text that summarises the section',
+            'Associate every form input with a meaningful <label>',
+            'Avoid using headings purely for visual styling',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/headings-and-labels',
+    },
+    '2.4.7': {
+        title: 'Focus Visible',
+        level: 'AA',
+        principle: 'Operable',
+        description: 'Any keyboard operable user interface has a mode of operation where the keyboard focus indicator is visible.',
+        why: 'Without a visible focus indicator, keyboard users cannot tell which element is currently focused, making navigation impossible.',
+        techniques: [
+            'Never remove the outline without providing a custom focus style',
+            'Use :focus-visible CSS pseudo-class to style focus indicators',
+            'Ensure focus indicators have sufficient contrast (WCAG 2.2 requires 3:1)',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/focus-visible',
+    },
+    '3.1.1': {
+        title: 'Language of Page',
+        level: 'A',
+        principle: 'Understandable',
+        description: 'The default human language of each Web page can be programmatically determined.',
+        why: 'Screen readers use the page language to determine pronunciation rules. Without a lang attribute, text may be mispronounced.',
+        techniques: [
+            'Add lang attribute to the <html> element: <html lang="en">',
+            'Use BCP 47 language tags (e.g. en, fr, de, zh-Hans)',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/language-of-page',
+    },
+    '3.1.2': {
+        title: 'Language of Parts',
+        level: 'AA',
+        principle: 'Understandable',
+        description: 'The human language of each passage or phrase in the content can be programmatically determined.',
+        why: 'When a page contains text in multiple languages, the correct lang attribute ensures screen readers switch to the appropriate voice/pronunciation.',
+        techniques: [
+            'Add lang attribute to elements containing text in a different language',
+            'Example: <span lang="fr">Bonjour</span>',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/language-of-parts',
+    },
+    '3.3.1': {
+        title: 'Error Identification',
+        level: 'A',
+        principle: 'Understandable',
+        description: 'If an input error is automatically detected, the item that is in error is identified and the error is described to the user in text.',
+        why: 'Users need to know exactly which field has an error and what the error is. Colour alone or a generic "form has errors" message is not sufficient.',
+        techniques: [
+            'Display error messages adjacent to the relevant input field',
+            'Use aria-describedby to programmatically associate the error with the input',
+            'Set aria-invalid="true" on inputs that have errors',
+            'Do not rely on colour alone to indicate errors',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/error-identification',
+    },
+    '3.3.2': {
+        title: 'Labels or Instructions',
+        level: 'A',
+        principle: 'Understandable',
+        description: 'Labels or instructions are provided when content requires user input.',
+        why: 'Users need clear instructions about what each form field expects, including required format, character limits, or allowed values.',
+        techniques: [
+            'Provide a visible <label> for every input',
+            'Include format hints (e.g. "DD/MM/YYYY") in the label or hint text',
+            'Indicate required fields (both visually and with aria-required)',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/labels-or-instructions',
+    },
+    '4.1.1': {
+        title: 'Parsing',
+        level: 'A',
+        principle: 'Robust',
+        description: 'In content implemented using markup languages, elements have complete start and end tags, elements are nested according to their specifications, elements do not contain duplicate attributes, and any IDs are unique.',
+        why: 'Malformed HTML can cause assistive technologies to misinterpret or skip content. Unique IDs are required for ARIA relationships to work correctly.',
+        techniques: [
+            'Validate HTML using the W3C Markup Validation Service',
+            'Ensure all IDs on a page are unique',
+            'Close all opened HTML tags properly',
+            'Do not duplicate attributes on the same element',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/parsing',
+    },
+    '4.1.2': {
+        title: 'Name, Role, Value',
+        level: 'A',
+        principle: 'Robust',
+        description: 'For all user interface components, the name and role can be programmatically determined; states, properties, and values that can be set by the user can be programmatically determined.',
+        why: 'Assistive technologies need to know the accessible name, role (button, link, checkbox…), and current state (checked, expanded, disabled) of every interactive element.',
+        techniques: [
+            'Use native HTML elements with built-in roles (button, input, select)',
+            'Provide accessible names via aria-label or aria-labelledby',
+            'Update aria-expanded, aria-checked, aria-selected dynamically',
+            'Avoid using <div> or <span> as interactive controls without ARIA roles',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/name-role-value',
+    },
+    '4.1.3': {
+        title: 'Status Messages',
+        level: 'AA',
+        principle: 'Robust',
+        description: 'In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus.',
+        why: 'Success or error messages that appear without focus change (e.g. after form submission) must be announced by screen readers via live regions.',
+        techniques: [
+            'Use role="status" for non-urgent status messages',
+            'Use role="alert" or aria-live="assertive" for important alerts',
+            'Do not move focus to the message; let the live region announce it',
+        ],
+        url: 'https://www.w3.org/WAI/WCAG21/Understanding/status-messages',
+    },
+};
+
+function openWcagPanel(criteriaId) {
+    const data = WCAG_CRITERIA[criteriaId];
+    const panel = document.getElementById('wcag-panel');
+    const overlay = document.getElementById('wcag-overlay');
+    if (!panel || !overlay) return;
+
+    const levelColour = { A: 'badge-green', AA: 'badge-minor', AAA: 'badge-serious' };
+
+    panel.querySelector('#wcag-panel-title').textContent = `${criteriaId} – ${data ? data.title : 'Unknown Criterion'}`;
+    panel.querySelector('#wcag-panel-body').innerHTML = data ? `
+        <div class="wcag-panel-meta">
+            <span class="badge ${levelColour[data.level] || 'badge-minor'}">Level ${data.level}</span>
+            <span class="wcag-panel-principle">${data.principle}</span>
+        </div>
+        <p class="wcag-panel-desc">${esc(data.description)}</p>
+        <h4>Why it matters</h4>
+        <p>${esc(data.why)}</p>
+        <h4>How to fix</h4>
+        <ul class="wcag-panel-techniques">
+            ${data.techniques.map(t => `<li>${esc(t)}</li>`).join('')}
+        </ul>
+        <a class="wcag-panel-link" href="${esc(data.url)}" target="_blank" rel="noopener noreferrer">
+            Read full understanding document ↗
+        </a>
+    ` : `<p style="color:var(--text-muted)">No reference data available for criterion ${esc(criteriaId)}.</p>`;
+
+    overlay.classList.add('active');
+    panel.classList.add('active');
+    panel.setAttribute('aria-hidden', 'false');
+    // Move focus to the close button for accessibility
+    panel.querySelector('#wcag-panel-close').focus();
+}
+
+function closeWcagPanel() {
+    const panel = document.getElementById('wcag-panel');
+    const overlay = document.getElementById('wcag-overlay');
+    if (!panel || !overlay) return;
+    panel.classList.remove('active');
+    overlay.classList.remove('active');
+    panel.setAttribute('aria-hidden', 'true');
+    // Return focus to the element that triggered the panel
+    if (window._wcagPanelTrigger) { window._wcagPanelTrigger.focus(); window._wcagPanelTrigger = null; }
+}
+
+function initWcagPanel() {
+    document.getElementById('wcag-panel-close')?.addEventListener('click', closeWcagPanel);
+    document.getElementById('wcag-overlay')?.addEventListener('click', closeWcagPanel);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('wcag-panel')?.classList.contains('active')) {
+            closeWcagPanel();
+        }
+    });
 }
