@@ -363,9 +363,66 @@ function clearFormValidation(form) {
         const errEl = el.closest('.form-group')?.querySelector('.field-error');
         if (errEl) errEl.classList.remove('visible');
     });
+function showToast(msg, type = 'success') {
+    let c = document.querySelector('.toast-container');
+    if (!c) {
+        c = document.createElement('div');
+        c.className = 'toast-container';
+        c.setAttribute('role', 'status');
+        c.setAttribute('aria-live', 'polite');
+        c.setAttribute('aria-atomic', 'true');
+        document.body.appendChild(c);
+    }
+    const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
+    setTimeout(() => { t.style.animation = 'toast-in 0.3s ease reverse forwards'; setTimeout(() => t.remove(), 300); }, 3000);
 }
 
-// Auth
+// ── Focus trap ────────────────────────────────────────────────────────────────
+// Traps Tab/Shift+Tab focus within `el`. Returns a cleanup function.
+function trapFocus(el) {
+    const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const handler = (e) => {
+        if (e.key !== 'Tab') return;
+        const nodes = [...el.querySelectorAll(sel)];
+        if (!nodes.length) { e.preventDefault(); return; }
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    };
+    el.addEventListener('keydown', handler);
+    return () => el.removeEventListener('keydown', handler);
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+// Opens an overlay, traps focus, returns a close() function.
+function openModal(overlay) {
+    const returnFocus = document.activeElement;
+    overlay.classList.add('active');
+    overlay.setAttribute('aria-hidden', 'false');
+    const inner = overlay.querySelector('.modal') || overlay;
+    const releaseTrap = trapFocus(inner);
+    // Focus first interactive element
+    const firstFocusable = inner.querySelector('input, button, [tabindex]');
+    firstFocusable?.focus();
+
+    const close = () => {
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+        releaseTrap();
+        overlay.removeEventListener('keydown', escHandler);
+        returnFocus?.focus();
+    };
+    const escHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+    overlay.addEventListener('keydown', escHandler);
+    // Close on backdrop click
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }, { once: true });
+    return close;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
 function initAuth(type) {
     if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
     const form = document.getElementById('auth-form');
@@ -424,17 +481,20 @@ function initAuth(type) {
     });
 }
 
-// Dashboard
-let currentView = 'sites'; // sites, scan-detail
+// ── Dashboard state ───────────────────────────────────────────────────────────
+let currentView = 'sites'; // sites | scans | scan-detail
 let currentSiteId = null;
 let currentScanId = null;
 let _scoreTrendChart = null;
 let _severityChart = null;
 let currentScan = null;
 let currentIssues = [];
+let closeAddModal = null;
+let closeShortcutsModal = null;
 
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
+
     document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
     document.getElementById('add-site-btn')?.addEventListener('click', () => document.getElementById('add-modal').classList.add('active'));
     document.getElementById('close-modal')?.addEventListener('click', () => {
@@ -448,6 +508,32 @@ async function initDashboard() {
     // Close modals when clicking the backdrop
     document.getElementById('add-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
     document.getElementById('edit-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
+
+    // Add-site modal
+    const addModal = document.getElementById('add-modal');
+    document.getElementById('add-site-btn')?.addEventListener('click', () => {
+        closeAddModal = openModal(addModal);
+    });
+    document.getElementById('close-modal')?.addEventListener('click', () => closeAddModal?.());
+    document.getElementById('site-form')?.addEventListener('submit', addSite);
+
+    // Keyboard shortcuts modal
+    const shortcutsModal = document.getElementById('shortcuts-modal');
+    document.getElementById('shortcuts-trigger')?.addEventListener('click', () => {
+        closeShortcutsModal = openModal(shortcutsModal);
+    });
+    document.getElementById('close-shortcuts')?.addEventListener('click', () => closeShortcutsModal?.());
+
+    // Keyboard event delegation for site/scan cards (Enter or Space)
+    document.getElementById('dash-content')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            const card = e.target.closest('.site-card[data-action]');
+            if (card) { e.preventDefault(); card.click(); }
+        }
+    });
+
+    initKeyboardShortcuts();
+
     await loadStats();
     await Promise.all([loadSites(), loadCharts()]);
 }
@@ -459,6 +545,56 @@ function setStatVal(id, val) {
     el.textContent = val;
 }
 
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+function initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Never fire shortcuts while typing
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        // Don't fire when a modal is open (modal handles Esc internally)
+        const modalOpen = document.querySelector('.modal-overlay.active');
+        if (modalOpen && e.key !== 'Escape') return;
+
+        switch (e.key) {
+            case 'n':
+            case 'N':
+                e.preventDefault();
+                document.getElementById('add-site-btn')?.click();
+                break;
+            case 'b':
+            case 'B':
+                e.preventDefault();
+                if (currentView === 'scan-detail') { openSite(currentSiteId); }
+                else if (currentView === 'scans') { loadSites(); }
+                break;
+            case 'r':
+            case 'R':
+                e.preventDefault();
+                refreshCurrentView();
+                break;
+            case '?':
+                e.preventDefault();
+                document.getElementById('shortcuts-trigger')?.click();
+                break;
+            case 'Escape':
+                // Handled per-modal via openModal(); also navigate back if no modal open
+                if (!modalOpen) {
+                    if (currentView === 'scan-detail') openSite(currentSiteId);
+                    else if (currentView === 'scans') loadSites();
+                }
+                break;
+        }
+    });
+}
+
+async function refreshCurrentView() {
+    await loadStats();
+    if (currentView === 'scan-detail' && currentScanId) await openScan(currentScanId);
+    else if (currentView === 'scans' && currentSiteId) await openSite(currentSiteId);
+    else await loadSites();
+}
+
+// ── Dashboard data ────────────────────────────────────────────────────────────
 async function loadStats() {
     const ids = ['stat-sites', 'stat-scans', 'stat-score', 'stat-issues', 'stat-critical'];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('sk'); });
@@ -482,6 +618,8 @@ async function loadStats() {
 async function loadSites() {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="sites-list" aria-busy="true" aria-label="Loading sites">${skSiteCards(3)}</div>`;
+    currentView = 'sites'; currentSiteId = null; currentScanId = null;
+    const el = document.getElementById('dash-content');
     try {
         const sites = await API.req('GET', '/sites');
         if (!sites?.length) {
@@ -489,9 +627,9 @@ async function loadSites() {
             return;
         }
         el.innerHTML = `<div class="sites-list">${sites.map(s => `
-            <div class="site-card" onclick="openSite(${s.id})">
+            <div class="site-card" tabindex="0" role="button" data-action="open-site" data-site-id="${s.id}" onclick="openSite(${s.id})" aria-label="View scans for ${esc(s.name)}">
                 <div class="site-info">
-                    ${s.last_score !== null ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">--</div>`}
+                    ${s.last_score !== null ? `<div class="score-ring ${scoreClass(s.last_score)}" aria-label="Score: ${s.last_score.toFixed(0)}">${s.last_score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)" aria-label="Not yet scored">--</div>`}
                     <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
                 </div>
                 <div class="site-meta">
@@ -500,6 +638,8 @@ async function loadSites() {
                     <button class="btn btn-sm btn-edit" aria-label="Edit ${esc(s.name)}" onclick="event.stopPropagation();openEditSite(${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.url).replace(/'/g,"\\'")}')">Edit</button>
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id},this)">Scan Now</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
+                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})" aria-label="Scan ${esc(s.name)} now">Scan Now</button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
                 </div>
             </div>`).join('')}</div>`;
     } catch (e) { console.error(e); }
@@ -510,6 +650,9 @@ async function openSite(siteId) {
     const el = document.getElementById('main-content');
     el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
         <div class="sites-list" aria-busy="true" aria-label="Loading scans">${skSiteCards(3)}</div>`;
+    currentView = 'scans'; currentSiteId = siteId; currentScanId = null;
+    const el = document.getElementById('dash-content');
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading scans...</p>';
     try {
         const scans = await API.req('GET', `/sites/${siteId}/scans`);
         const sites = await API.req('GET', '/sites');
@@ -523,9 +666,9 @@ async function openSite(siteId) {
         el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
             <h2 style="margin-bottom:16px">${esc(site?.name || '')}</h2>
             <div class="sites-list">${scans.map(s => `
-                <div class="site-card" onclick="openScan(${s.id})">
+                <div class="site-card" tabindex="0" role="button" data-action="open-scan" data-scan-id="${s.id}" onclick="openScan(${s.id})" aria-label="View details for Scan #${s.id}, status: ${s.status}">
                     <div class="site-info">
-                        ${s.score !== null ? `<div class="score-ring ${scoreClass(s.score)}">${s.score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">${s.status === 'running' ? '...' : '--'}</div>`}
+                        ${s.score !== null ? `<div class="score-ring ${scoreClass(s.score)}" aria-label="Score: ${s.score.toFixed(0)}">${s.score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)" aria-label="${s.status === 'running' ? 'Scan running' : 'No score yet'}">${s.status === 'running' ? '...' : '--'}</div>`}
                         <div>
                             <div class="name">Scan #${s.id} &mdash; ${s.status}</div>
                             <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues &mdash; ${timeAgo(s.completed_at || s.created_at)}</div>
@@ -558,6 +701,9 @@ async function openScan(scanId) {
         </div>
         <div class="sk" style="height:18px;width:130px;margin-bottom:12px"></div>
         <div class="issues-list" aria-busy="true" aria-label="Loading issues">${skIssueCards(4)}</div>`;
+    currentView = 'scan-detail'; currentScanId = scanId;
+    const el = document.getElementById('dash-content');
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading issues...</p>';
     try {
         const [scan, issues] = await Promise.all([
             API.req('GET', `/scans/${scanId}`),
@@ -614,7 +760,7 @@ async function openScan(scanId) {
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <div class="scan-detail-header">
                     <h3>Scan #${scan.id}</h3>
-                    ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
+                    ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem" aria-label="Accessibility score: ${scan.score.toFixed(0)} out of 100">${scan.score.toFixed(0)}</div>` : ''}
                 </div>
                 <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
                 <div class="severity-bar">
@@ -813,6 +959,8 @@ async function addSite(e) {
     try {
         await API.req('POST', '/sites', { name: nameInput.value.trim(), url: urlInput.value.trim() });
         document.getElementById('add-modal').classList.remove('active');
+        await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
+        closeAddModal?.();
         form.reset();
         clearFormValidation(form);
         showToast('Site added');
@@ -945,6 +1093,10 @@ function trackScanProgress(siteId, scanId) {
         es.close();
         const text = document.getElementById(`scan-progress-text-${siteId}`);
         if (text) text.textContent = 'Lost connection — refreshing…';
+async function startScan(siteId) {
+    try {
+        await API.req('POST', `/sites/${siteId}/scan`);
+        showToast('Scan started! Refresh in a few seconds to see results.');
         setTimeout(async () => {
             banner?.remove();
             await loadStats();

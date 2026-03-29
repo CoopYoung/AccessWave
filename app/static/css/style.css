@@ -20,6 +20,22 @@ html[data-theme="dark"] {
 html { scroll-behavior: smooth; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; transition: background-color 0.2s, color 0.2s; }
 a { color: var(--primary); text-decoration: none; } a:hover { color: var(--primary-hover); }
+
+/* Skip link — visually hidden until focused */
+.skip-link {
+    position: absolute; top: -100%; left: 8px; z-index: 9999;
+    background: var(--primary); color: #fff; padding: 10px 20px; border-radius: 0 0 8px 8px;
+    font-size: 0.9rem; font-weight: 600; text-decoration: none;
+    transition: top 0.1s;
+}
+.skip-link:focus { top: 0; color: #fff; }
+
+/* Global focus-visible: clear outline for keyboard users, none for mouse */
+:focus { outline: none; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+.btn:focus-visible { outline-offset: 2px; }
+.site-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.score-ring:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
 .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
 
 nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 0; position: sticky; top: 0; z-index: 50; transition: background-color 0.2s, border-color 0.2s; }
@@ -550,6 +566,34 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
 .scan-progress-text { font-size: 0.88rem; font-weight: 600; color: var(--primary); flex: 1; }
 .scan-progress-bar-track { background: rgba(79,70,229,0.15); border-radius: 100px; height: 8px; overflow: hidden; }
 .scan-progress-bar-fill { background: var(--primary); height: 100%; border-radius: 100px; transition: width 0.4s ease; min-width: 0; }
+
+/* Icon-only button (keyboard shortcut trigger) */
+.btn-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-muted); font-size: 1rem; cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+}
+.btn-icon:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+/* Keyboard shortcut cheatsheet dialog */
+.shortcuts-modal { max-width: 380px; }
+.shortcuts-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.shortcuts-modal-header h3 { margin: 0; }
+.shortcuts-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.shortcut-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.shortcut-row:last-child { border-bottom: none; }
+.shortcut-row dt { flex-shrink: 0; min-width: 100px; }
+.shortcut-row dd { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+
+kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 5px;
+    padding: 2px 8px; font-family: inherit; font-size: 0.78rem; font-weight: 600;
+    color: var(--text); white-space: nowrap;
+}
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
