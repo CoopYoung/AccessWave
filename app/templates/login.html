@@ -8,10 +8,20 @@
         <div id="error-msg" class="error-msg"></div>
         <form id="auth-form" novalidate>
             <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com"></div>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container"><a href="/" class="logo">Access<span>Wave</span></a></div></nav>
+    <main id="main-content">
+    <div class="auth-page"><div class="auth-card">
+        <h2>Welcome back</h2><p class="subtitle">Log in to your dashboard</p>
+        <div id="error-msg" class="error-msg" role="alert"></div>
+        <form id="auth-form" novalidate>
+            <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email"></div>
             <div class="form-group"><label for="password">Password</label><input type="password" id="password" name="password" required autocomplete="current-password"></div>
             <button type="submit" class="btn btn-primary">Sign In</button>
         </form>
         <p class="footer">No account? <a href="/register">Sign up free</a></p>
     </div></div>
     <script src="/static/js/app.js"></script><script>initDarkMode(); initAuth('login');</script>
+    </main>
+    <script src="/static/js/app.js"></script><script>initAuth('login');</script>
 </body></html>

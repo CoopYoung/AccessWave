@@ -10,7 +10,8 @@
     <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
-    <nav><div class="container">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
             <span></span><span></span><span></span>
@@ -19,16 +20,18 @@
             <a href="#" onclick="upgradePlan('pro')">Upgrade</a>
             <a href="#" id="logout-btn">Log out</a>
             <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+            <button class="btn btn-outline btn-sm" id="shortcuts-trigger" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">⌨</button>
         </div>
     </div></nav>
 
+    <main id="main-content">
     <div class="container dash">
         <div class="dash-header">
             <h1>Dashboard</h1>
             <button class="btn btn-primary" id="add-site-btn">+ Add Site</button>
         </div>
 
-        <div class="stats-grid">
+        <div class="stats-grid" aria-label="Dashboard statistics">
             <div class="stat-card"><div class="label">Sites</div><div class="value" id="stat-sites">--</div></div>
             <div class="stat-card"><div class="label">Total Scans</div><div class="value" id="stat-scans">--</div></div>
             <div class="stat-card"><div class="label">Avg Score</div><div class="value" id="stat-score">--</div></div>
@@ -65,6 +68,39 @@
             <button type="button" class="btn btn-outline" id="close-modal" style="margin-left:8px">Cancel</button>
         </form>
     </div></div>
+        <div id="dash-content" aria-live="polite" aria-atomic="false"><p style="color:var(--text-muted)">Loading...</p></div>
+    </div>
+    </main>
+
+    <div id="add-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-modal-title" aria-hidden="true">
+        <div class="modal">
+            <h3 id="add-modal-title">Add a Site</h3>
+            <form id="site-form">
+                <div class="form-group"><label for="site-name">Site Name</label><input type="text" id="site-name" name="name" required placeholder="My Website"></div>
+                <div class="form-group"><label for="site-url">URL</label><input type="url" id="site-url" name="url" required placeholder="https://example.com"></div>
+                <button type="submit" class="btn btn-primary">Add Site</button>
+                <button type="button" class="btn btn-outline" id="close-modal" style="margin-left:8px">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="shortcuts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title" aria-hidden="true">
+        <div class="modal shortcuts-modal">
+            <div class="shortcuts-modal-header">
+                <h3 id="shortcuts-modal-title">Keyboard Shortcuts</h3>
+                <button class="btn-icon" id="close-shortcuts" aria-label="Close keyboard shortcuts">✕</button>
+            </div>
+            <dl class="shortcuts-list">
+                <div class="shortcut-row"><dt><kbd>N</kbd></dt><dd>Add new site</dd></div>
+                <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Back to sites list</dd></div>
+                <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Refresh current view</dd></div>
+                <div class="shortcut-row"><dt><kbd>Shift + /</kbd></dt><dd>Show this help</dd></div>
+                <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close modal / go back</dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
         <div class="modal">

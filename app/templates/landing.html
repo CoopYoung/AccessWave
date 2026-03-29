@@ -9,7 +9,8 @@
     <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
-    <nav><div class="container">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
             <span></span><span></span><span></span>
@@ -23,6 +24,7 @@
         </div>
     </div></nav>
 
+    <main id="main-content">
     <section class="hero"><div class="container">
         <h1>Your website is probably<br><span>not accessible</span></h1>
         <p>98% of websites fail WCAG compliance. Lawsuits are up 300%. Scan your site in seconds, get a score, and fix issues before they become legal problems.</p>
@@ -68,6 +70,7 @@
         </div>
     </div></section>
 
+    </main>
     <footer><div class="container"><p>AccessWave &mdash; Making the web accessible, one scan at a time.</p></div></footer>
     <script src="/static/js/app.js"></script>
     <script>initDarkMode();</script>
