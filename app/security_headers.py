@@ -49,7 +49,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'",
             "form-action 'self'",
             "frame-ancestors 'none'",
-            "upgrade-insecure-requests",
         ]
         if settings.CSP_REPORT_URI:
             csp_directives.append(f"report-uri {settings.CSP_REPORT_URI}")
