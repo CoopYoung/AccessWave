@@ -177,6 +177,32 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .issue-code .hljs { background: transparent; padding: 0; }
 .issue-fix { color: var(--green); font-size: 0.88rem; background: var(--green-light); padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
 
+/* Site header: site name + Scan Now button */
+.site-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.site-header h2 { margin: 0; }
+
+/* Scan filter panel (collapsible <details>) */
+.scan-filters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; }
+.filter-summary { display: flex; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); list-style: none; user-select: none; }
+.filter-summary::-webkit-details-marker { display: none; }
+.filter-summary::after { content: '\25B8'; margin-left: auto; font-size: 0.75rem; transition: transform 0.2s; }
+.scan-filters[open] .filter-summary::after { transform: rotate(90deg); }
+.filter-summary:hover { color: var(--primary); }
+.filter-active-badge { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); display: inline-block; }
+.filter-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 0 16px 16px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+.filter-group label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.filter-group select, .filter-input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.88rem; height: 34px; font-family: inherit; }
+.filter-group select:focus, .filter-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
+.filter-actions { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 1px; }
+
+/* Scan count label */
+.scan-count-label { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 10px; min-height: 1.2em; }
+
+/* Pagination */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 16px; padding: 8px 0; }
+.page-info { color: var(--text-muted); font-size: 0.88rem; font-weight: 500; }
+
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 100; }
 .modal-overlay.active { display: flex; }
 .modal { background: var(--surface); border-radius: 14px; padding: 32px; width: 100%; max-width: 460px; transition: background-color 0.2s; }
@@ -600,4 +626,9 @@ kbd {
     .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
     /* Stack gauge above text on narrow screens */
     .scan-summary { flex-direction: column-reverse; align-items: center; }
+    .filter-fields { flex-direction: column; gap: 10px; }
+    .filter-group, .filter-group select, .filter-input { min-width: unset; width: 100%; }
+    .filter-actions { width: 100%; }
+    .filter-actions .btn { flex: 1; }
+    .site-header h2 { font-size: 1.15rem; }
 }
