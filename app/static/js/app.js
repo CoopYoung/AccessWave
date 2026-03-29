@@ -190,28 +190,127 @@ function skIssueCards(n) {
         </div>`).join('');
 }
 
+// Inline field validation helpers
+function setFieldError(inputEl, message) {
+    inputEl.classList.add('input-invalid');
+    inputEl.classList.remove('input-valid');
+    inputEl.setAttribute('aria-invalid', 'true');
+    const group = inputEl.closest('.form-group');
+    let errEl = group.querySelector('.field-error');
+    if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.className = 'field-error';
+        errEl.setAttribute('role', 'alert');
+        errEl.id = (inputEl.id || inputEl.name) + '-error';
+        inputEl.setAttribute('aria-describedby', errEl.id);
+        group.appendChild(errEl);
+    }
+    errEl.textContent = message;
+    errEl.classList.add('visible');
+}
+function clearFieldError(inputEl) {
+    inputEl.classList.remove('input-invalid');
+    inputEl.removeAttribute('aria-invalid');
+    const errEl = inputEl.closest('.form-group')?.querySelector('.field-error');
+    if (errEl) errEl.classList.remove('visible');
+}
+function setFieldValid(inputEl) {
+    inputEl.classList.add('input-valid');
+    inputEl.classList.remove('input-invalid');
+    clearFieldError(inputEl);
+}
+function validateEmailField(inputEl) {
+    const v = inputEl.value.trim();
+    if (!v) { setFieldError(inputEl, 'Email is required'); return false; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { setFieldError(inputEl, 'Enter a valid email address'); return false; }
+    setFieldValid(inputEl); return true;
+}
+function validatePasswordField(inputEl, minLen = 8) {
+    const v = inputEl.value;
+    if (!v) { setFieldError(inputEl, 'Password is required'); return false; }
+    if (v.length < minLen) { setFieldError(inputEl, `Password must be at least ${minLen} characters`); return false; }
+    setFieldValid(inputEl); return true;
+}
+function validateRequiredField(inputEl, label) {
+    const v = inputEl.value.trim();
+    if (!v) { setFieldError(inputEl, `${label} is required`); return false; }
+    setFieldValid(inputEl); return true;
+}
+function validateURLField(inputEl) {
+    const v = inputEl.value.trim();
+    if (!v) { setFieldError(inputEl, 'URL is required'); return false; }
+    try {
+        const url = new URL(v);
+        if (!['http:', 'https:'].includes(url.protocol)) { setFieldError(inputEl, 'URL must start with http:// or https://'); return false; }
+    } catch { setFieldError(inputEl, 'Enter a valid URL (e.g. https://example.com)'); return false; }
+    setFieldValid(inputEl); return true;
+}
+function clearFormValidation(form) {
+    form.querySelectorAll('input').forEach(el => {
+        el.classList.remove('input-valid', 'input-invalid');
+        el.removeAttribute('aria-invalid');
+        el.removeAttribute('aria-describedby');
+        const errEl = el.closest('.form-group')?.querySelector('.field-error');
+        if (errEl) errEl.classList.remove('visible');
+    });
+}
+
 // Auth
 function initAuth(type) {
     if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
-    const form = document.getElementById('auth-form'), err = document.getElementById('error-msg');
+    const form = document.getElementById('auth-form');
+    const globalErr = document.getElementById('error-msg');
     if (!form) return;
+
+    const emailInput = form.querySelector('#email');
+    const passwordInput = form.querySelector('#password');
+
+    // Validate on blur so users get feedback as they fill the form
+    emailInput?.addEventListener('blur', () => { if (emailInput.value) validateEmailField(emailInput); });
+    emailInput?.addEventListener('focus', () => clearFieldError(emailInput));
+    if (type === 'register') {
+        passwordInput?.addEventListener('blur', () => { if (passwordInput.value) validatePasswordField(passwordInput); });
+        passwordInput?.addEventListener('focus', () => clearFieldError(passwordInput));
+    }
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault(); err.style.display = 'none';
         const btn = form.querySelector('button[type=submit]');
         const origText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = `<span class="spinner" aria-hidden="true"></span>${type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026'}`;
+        e.preventDefault();
+        globalErr.style.display = 'none';
+
+        // Validate all fields before submitting
+        const emailOk = validateEmailField(emailInput);
+        const pwOk = type === 'register' ? validatePasswordField(passwordInput) : validateRequiredField(passwordInput, 'Password');
+        if (!emailOk || !pwOk) return;
+
+        const btn = form.querySelector('button[type=submit]');
+        const origLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026';
         try {
             let data;
             if (type === 'register') {
-                data = await API.req('POST', '/auth/register', { email: form.email.value, password: form.password.value });
+                data = await API.req('POST', '/auth/register', { email: emailInput.value.trim(), password: passwordInput.value });
             } else {
-                const fd = new URLSearchParams(); fd.append('username', form.email.value); fd.append('password', form.password.value);
-                const r = await fetch('/api/auth/login', { method: 'POST', body: fd }); data = await r.json();
+                const fd = new URLSearchParams();
+                fd.append('username', emailInput.value.trim());
+                fd.append('password', passwordInput.value);
+                const r = await fetch('/api/auth/login', { method: 'POST', body: fd });
+                data = await r.json();
                 if (!r.ok) throw new Error(data.detail || 'Login failed');
             }
             API.setToken(data.access_token); window.location.href = '/dashboard';
         } catch (e) { err.textContent = e.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = origText; }
+        } catch (err) {
+            globalErr.textContent = err.message;
+            globalErr.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = origLabel;
+        }
     });
 }
 
@@ -228,7 +327,11 @@ async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
     document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
     document.getElementById('add-site-btn')?.addEventListener('click', () => document.getElementById('add-modal').classList.add('active'));
-    document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
+    document.getElementById('close-modal')?.addEventListener('click', () => {
+        document.getElementById('add-modal').classList.remove('active');
+        const form = document.getElementById('site-form');
+        if (form) { form.reset(); clearFormValidation(form); }
+    });
     document.getElementById('site-form')?.addEventListener('submit', addSite);
     document.getElementById('close-edit-modal')?.addEventListener('click', () => document.getElementById('edit-modal').classList.remove('active'));
     document.getElementById('edit-site-form')?.addEventListener('submit', saveEditSite);
@@ -577,10 +680,18 @@ async function addSite(e) {
     const origText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Adding\u2026';
+    const nameInput = form.querySelector('[name=name]');
+    const urlInput = form.querySelector('[name=url]');
+
+    const nameOk = validateRequiredField(nameInput, 'Site name');
+    const urlOk = validateURLField(urlInput);
+    if (!nameOk || !urlOk) return;
+
     try {
-        await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
+        await API.req('POST', '/sites', { name: nameInput.value.trim(), url: urlInput.value.trim() });
         document.getElementById('add-modal').classList.remove('active');
         form.reset();
+        clearFormValidation(form);
         showToast('Site added');
         await Promise.all([loadStats(), loadSites()]);
     } catch (e) {
@@ -588,6 +699,7 @@ async function addSite(e) {
         btn.disabled = false;
         btn.innerHTML = origText;
     }
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function startScan(siteId, btn) {
