@@ -54,6 +54,23 @@
                     <div class="chart-wrap chart-wrap-sm">
                         <canvas id="severity-chart" role="img" aria-label="Doughnut chart showing total issues broken down by severity"></canvas>
                     </div>
+        <div class="activity-section" aria-labelledby="heatmap-heading">
+            <h2 class="section-title" id="heatmap-heading">Scan Activity — Last 12 Months</h2>
+            <div class="heatmap-wrap">
+                <div class="heatmap-scroll">
+                    <div id="heatmap-container"></div>
+                </div>
+                <div class="heatmap-legend" aria-label="Score colour legend">
+                    <span>Score:</span>
+                    <div class="legend-cells" role="list">
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-empty)" title="No scans" aria-label="No scans — grey"></span>
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-bad)"   title="0–29"     aria-label="Score 0–29 — red"></span>
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-warn)"  title="30–49"    aria-label="Score 30–49 — amber"></span>
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-ok)"    title="50–69"    aria-label="Score 50–69 — light green"></span>
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-good)"  title="70–89"    aria-label="Score 70–89 — green"></span>
+                        <span class="legend-cell" role="listitem" style="background:var(--heatmap-great)" title="90–100"   aria-label="Score 90–100 — dark green"></span>
+                    </div>
+                    <span>→ Better</span>
                 </div>
             </div>
         </div>
