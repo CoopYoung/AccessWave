@@ -130,6 +130,34 @@
          "still loading" toast if the user clicks before the scripts arrive. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <div id="badge-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="badge-modal-title">
+        <div class="modal">
+            <h3 id="badge-modal-title">Accessibility Badge</h3>
+            <p style="color:var(--text-muted);font-size:0.88rem;margin-bottom:16px">
+                Embed this badge on your site to publicly display your accessibility score.
+            </p>
+            <div class="badge-preview" id="badge-preview">
+                <img id="badge-img" src="" alt="" height="20" />
+                <span id="badge-site-name" style="color:var(--text-muted);font-size:0.88rem"></span>
+            </div>
+            <div class="form-group">
+                <label for="badge-html-code">HTML</label>
+                <div class="code-snippet">
+                    <code id="badge-html-code" class="code-text"></code>
+                    <button class="copy-btn" onclick="copyBadgeCode('html')" aria-label="Copy HTML embed code">Copy</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="badge-md-code">Markdown</label>
+                <div class="code-snippet">
+                    <code id="badge-md-code" class="code-text"></code>
+                    <button class="copy-btn" onclick="copyBadgeCode('md')" aria-label="Copy Markdown embed code">Copy</button>
+                </div>
+            </div>
+            <button type="button" class="btn btn-outline" id="close-badge-modal" style="margin-top:8px">Close</button>
+        </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
     <script>initDarkMode(); initDashboard();</script>
 </body>

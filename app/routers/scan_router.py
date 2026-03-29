@@ -11,6 +11,8 @@ import json
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
+import html as _html
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import case, func, nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -466,6 +468,65 @@ async def scan_progress_stream(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+# --- Badge ---
+
+@router.get("/sites/{site_id}/badge.svg", include_in_schema=True)
+async def site_badge(site_id: int, db: AsyncSession = Depends(get_db)):
+    """Public SVG badge showing a site's latest accessibility score. No auth required."""
+    site_result = await db.execute(select(Site).where(Site.id == site_id))
+    if not site_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    scan_result = await db.execute(
+        select(Scan)
+        .where(Scan.site_id == site_id, Scan.status == "completed")
+        .order_by(Scan.completed_at.desc())
+        .limit(1)
+    )
+    last_scan = scan_result.scalar_one_or_none()
+
+    if last_scan and last_scan.score is not None:
+        score = last_scan.score
+        value = f"{score:.0f}/100"
+        color = "#059669" if score >= 80 else ("#d97706" if score >= 50 else "#dc2626")
+    else:
+        value = "pending"
+        color = "#6b7280"
+
+    svg = _badge_svg("accessibility", value, color)
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+def _badge_svg(label: str, value: str, color: str) -> str:
+    """Render a flat shields.io-style SVG badge."""
+    label_w = round(len(label) * 6.5 + 16)
+    value_w = round(len(value) * 6.5 + 16)
+    total_w = label_w + value_w
+    lx = round(label_w / 2)
+    vx = round(label_w + value_w / 2)
+    sl = _html.escape(label)
+    sv = _html.escape(value)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20"'
+        f' role="img" aria-label="{sl}: {sv}">'
+        f'<title>{sl}: {sv}</title>'
+        f'<clipPath id="c"><rect width="{total_w}" height="20" rx="3"/></clipPath>'
+        f'<g clip-path="url(#c)">'
+        f'<rect width="{label_w}" height="20" fill="#555"/>'
+        f'<rect x="{label_w}" width="{value_w}" height="20" fill="{color}"/>'
+        f'</g>'
+        f'<g fill="#fff" font-family="Verdana,Geneva,DejaVu Sans,sans-serif"'
+        f' font-size="11" text-anchor="middle">'
+        f'<text x="{lx}" y="15" fill="#010101" fill-opacity=".25">{sl}</text>'
+        f'<text x="{lx}" y="14">{sl}</text>'
+        f'<text x="{vx}" y="15" fill="#010101" fill-opacity=".25">{sv}</text>'
+        f'<text x="{vx}" y="14">{sv}</text>'
+        f'</g>'
+        f'</svg>'
     )
 
 
