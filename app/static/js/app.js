@@ -503,6 +503,123 @@ let compareMode = false;
 let compareSelected = []; // up to 2 scan ids
 let cachedStats = null;
 
+// Sites view & sort state
+let sitesData = [];
+let siteViewMode = localStorage.getItem('aw_view_mode') || 'grid';
+let siteSortMode = localStorage.getItem('aw_sort_mode') || 'last_scan';
+
+function sortSites(sites, mode) {
+    const arr = [...sites];
+    if (mode === 'name_asc')   return arr.sort((a, b) => a.name.localeCompare(b.name));
+    if (mode === 'name_desc')  return arr.sort((a, b) => b.name.localeCompare(a.name));
+    if (mode === 'score_desc') return arr.sort((a, b) => (b.last_score ?? -1) - (a.last_score ?? -1));
+    if (mode === 'score_asc')  return arr.sort((a, b) => (a.last_score ?? 101) - (b.last_score ?? 101));
+    if (mode === 'created')    return arr.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    // default: last_scan
+    return arr.sort((a, b) => new Date(b.last_scan_at || 0) - new Date(a.last_scan_at || 0));
+}
+
+function renderSitesToolbar(count) {
+    const sorts = [
+        ['last_scan',   'Last scanned'],
+        ['score_desc',  'Score: high to low'],
+        ['score_asc',   'Score: low to high'],
+        ['name_asc',    'Name: A to Z'],
+        ['name_desc',   'Name: Z to A'],
+        ['created',     'Recently added'],
+    ];
+    const opts = sorts.map(([v, l]) => `<option value="${v}"${siteSortMode === v ? ' selected' : ''}>${l}</option>`).join('');
+    return `
+        <div class="sites-toolbar" role="toolbar" aria-label="Sites view controls">
+            <div class="toolbar-left">
+                <span class="site-count">${count} site${count !== 1 ? 's' : ''}</span>
+                <select class="sort-select" id="sort-select" aria-label="Sort sites by" onchange="setSortMode(this.value)">${opts}</select>
+            </div>
+            <div class="view-toggle" role="group" aria-label="Switch view layout">
+                <button class="view-btn${siteViewMode === 'grid' ? ' active' : ''}" onclick="setViewMode('grid')" aria-label="Grid view" aria-pressed="${siteViewMode === 'grid'}">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+                </button>
+                <button class="view-btn${siteViewMode === 'list' ? ' active' : ''}" onclick="setViewMode('list')" aria-label="List view" aria-pressed="${siteViewMode === 'list'}">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="7" width="14" height="2" rx="1"/><rect x="1" y="12" width="14" height="2" rx="1"/></svg>
+                </button>
+            </div>
+        </div>`;
+}
+
+function siteCardHtml(s) {
+    const ring = s.last_score !== null
+        ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
+        : `<div class="score-ring score-unscanned">--</div>`;
+    return `
+        <div class="site-card" onclick="openSite(${s.id})" tabindex="0" role="button"
+             aria-label="Open ${esc(s.name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
+            <div class="site-info">
+                ${ring}
+                <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
+            </div>
+            <div class="site-meta">
+                <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
+                <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})" aria-label="Scan ${esc(s.name)}">Scan Now</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
+            </div>
+        </div>`;
+}
+
+function renderSiteGrid(sites) {
+    return `<div class="sites-grid">${sites.map(siteCardHtml).join('')}</div>`;
+}
+
+function renderSiteList(sites) {
+    const rows = sites.map(s => {
+        const ring = s.last_score !== null
+            ? `<div class="score-ring score-ring-sm ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
+            : `<div class="score-ring score-ring-sm score-unscanned">--</div>`;
+        return `
+            <div class="site-row" onclick="openSite(${s.id})" tabindex="0" role="listitem"
+                 aria-label="${esc(s.name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
+                ${ring}
+                <div>
+                    <div class="row-name">${esc(s.name)}</div>
+                    <div class="row-url">${esc(s.url)}</div>
+                </div>
+                <div class="row-time">${s.last_scan_at ? timeAgo(s.last_scan_at) : 'Not scanned'}</div>
+                <div class="row-actions">
+                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})" aria-label="Scan ${esc(s.name)}">Scan</button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
+                </div>
+            </div>`;
+    }).join('');
+    return `<div class="sites-list-compact" role="list">
+        <div class="site-row-header" aria-hidden="true">
+            <span></span><span>Site</span><span>Last scanned</span><span>Actions</span>
+        </div>
+        ${rows}
+    </div>`;
+}
+
+function renderSites() {
+    const el = document.getElementById('main-content');
+    if (!el) return;
+    if (!sitesData.length) {
+        el.innerHTML = `<div class="empty-state"><div class="icon">\uD83C\uDF10</div><p>No sites added yet</p><p style="font-size:0.88rem">Add your first website to scan for accessibility issues.</p></div>`;
+        return;
+    }
+    const sorted = sortSites(sitesData, siteSortMode);
+    el.innerHTML = renderSitesToolbar(sorted.length) + (siteViewMode === 'list' ? renderSiteList(sorted) : renderSiteGrid(sorted));
+}
+
+function setViewMode(mode) {
+    siteViewMode = mode;
+    localStorage.setItem('aw_view_mode', mode);
+    renderSites();
+}
+
+function setSortMode(mode) {
+    siteSortMode = mode;
+    localStorage.setItem('aw_sort_mode', mode);
+    renderSites();
+}
+
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
 
@@ -741,6 +858,10 @@ async function loadSites() {
                     </div>
                 </div>`;
             }).join('')}</div>`;
+    try {
+        const sites = await API.req('GET', '/sites');
+        sitesData = sites || [];
+        renderSites();
     } catch (e) { console.error(e); }
 }
 
@@ -1564,6 +1685,7 @@ async function addSite(e) {
 
     try {
         await API.req('POST', '/sites', { name: nameInput.value.trim(), url: urlInput.value.trim() });
+        const site = await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
         document.getElementById('add-modal').classList.remove('active');
         await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
         closeAddModal?.();
@@ -1726,8 +1848,10 @@ async function deleteSite(siteId) {
     try {
         await API.req('DELETE', `/sites/${siteId}`);
         selectedSites.delete(siteId);
+        sitesData = sitesData.filter(s => s.id !== siteId);
         showToast('Site deleted');
-        await Promise.all([loadStats(), loadSites()]);
+        await loadStats();
+        renderSites();
     } catch (e) { showToast(e.message, 'error'); }
 }
 
