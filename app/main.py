@@ -127,3 +127,6 @@ async def settings_page(request: Request):
 @app.get("/api-keys", response_class=HTMLResponse)
 async def api_keys_page(request: Request):
     return templates.TemplateResponse("api_keys.html", {"request": request})
+@app.get("/share/{token}", response_class=HTMLResponse)
+async def shared_report_page(request: Request, token: str):
+    return templates.TemplateResponse("shared_report.html", {"request": request, "token": token})

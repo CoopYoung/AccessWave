@@ -1237,6 +1237,25 @@ async function openScan(scanId) {
                 <div class="scan-detail-header">
                     <h3>Scan #${scan.id}</h3>
                     ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem" aria-label="Accessibility score: ${scan.score.toFixed(0)} out of 100">${scan.score.toFixed(0)}</div>` : ''}
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+                    <h3>Scan #${scan.id}</h3>
+                    <div style="display:flex;align-items:center;gap:12px">
+                        ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
+                        ${scan.status === 'completed' ? `<button class="btn btn-outline btn-sm" id="share-btn-${scan.id}" onclick="toggleSharePanel(${scan.id})" aria-expanded="false" aria-controls="share-panel-${scan.id}">&#x1F517; Share</button>` : ''}
+                    </div>
+                </div>
+                <div id="share-panel-${scan.id}" class="share-panel" hidden>
+                    <div class="share-panel-inner">
+                        <p class="share-panel-label">Share this report publicly &mdash; anyone with the link can view it.</p>
+                        <div class="share-link-row">
+                            <input type="text" id="share-link-input-${scan.id}" class="share-link-input" readonly aria-label="Public report link" placeholder="Generating link&hellip;">
+                            <button class="btn btn-sm btn-primary" onclick="copyShareLink(${scan.id})" aria-label="Copy link to clipboard">Copy</button>
+                        </div>
+                        <div class="share-actions">
+                            <button class="btn btn-sm btn-outline" onclick="generateShareLink(${scan.id})">&#x21BB; Regenerate</button>
+                            <button class="btn btn-sm btn-danger" onclick="revokeShareLink(${scan.id})">Revoke link</button>
+                        </div>
+                    </div>
                 </div>
                 <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
                 <div class="severity-bar">
@@ -1883,4 +1902,50 @@ function hideBanner(el) {
     if (!el) return;
     el.hidden = true;
     el.textContent = '';
+// Share
+function toggleSharePanel(scanId) {
+    const panel = document.getElementById(`share-panel-${scanId}`);
+    const btn = document.getElementById(`share-btn-${scanId}`);
+    const isOpen = !panel.hidden;
+    panel.hidden = isOpen;
+    btn.setAttribute('aria-expanded', String(!isOpen));
+    if (!isOpen) {
+        const input = document.getElementById(`share-link-input-${scanId}`);
+        if (!input.value) generateShareLink(scanId);
+    }
+}
+
+async function generateShareLink(scanId) {
+    const input = document.getElementById(`share-link-input-${scanId}`);
+    input.value = 'Generating…';
+    try {
+        const data = await API.req('POST', `/scans/${scanId}/share`);
+        input.value = data.share_url;
+    } catch (e) {
+        input.value = '';
+        showToast(e.message, 'error');
+    }
+}
+
+async function copyShareLink(scanId) {
+    const input = document.getElementById(`share-link-input-${scanId}`);
+    if (!input.value || input.value === 'Generating…') return;
+    try {
+        await navigator.clipboard.writeText(input.value);
+        showToast('Link copied to clipboard!');
+    } catch (_) {
+        input.select();
+        document.execCommand('copy');
+        showToast('Link copied!');
+    }
+}
+
+async function revokeShareLink(scanId) {
+    if (!confirm('Revoke the public share link? Anyone with the current link will lose access.')) return;
+    try {
+        await API.req('DELETE', `/scans/${scanId}/share`);
+        const input = document.getElementById(`share-link-input-${scanId}`);
+        input.value = '';
+        showToast('Share link revoked.', 'info');
+    } catch (e) { showToast(e.message, 'error'); }
 }

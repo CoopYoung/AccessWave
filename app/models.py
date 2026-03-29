@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -43,6 +44,7 @@ class Scan(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    share_token = Column(String(36), nullable=True, unique=True, index=True)  # UUID for public share links
     site = relationship("Site", back_populates="scans")
     issues = relationship("Issue", back_populates="scan", cascade="all, delete-orphan")
 
