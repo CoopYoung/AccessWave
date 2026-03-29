@@ -363,13 +363,12 @@ async def start_scan(
 async def list_scans(
     site_id: int,
     limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     status: str | None = Query(default=None),
     min_score: float | None = Query(default=None, ge=0, le=100),
     max_score: float | None = Query(default=None, ge=0, le=100),
     sort: str = Query(default="created_at", pattern="^(created_at|score|total_issues)$"),
     order: str = Query(default="desc", pattern="^(asc|desc)$"),
-    limit: int = Query(default=20, ge=1, le=50),
-    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -537,6 +536,8 @@ async def dashboard_chart_data(user: User = Depends(get_current_user), db: Async
             "moderate": int(sev.moderate),
             "minor": int(sev.minor),
         },
+    )
+
 # --- SSE scan progress stream ---
 
 async def _get_user_from_query_token(
@@ -612,6 +613,8 @@ async def scan_progress_stream(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 # --- Badge ---
 
 @router.get("/sites/{site_id}/badge.svg", include_in_schema=True)

@@ -95,10 +95,9 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
     user = result.scalar_one_or_none()
     if not user or not verify_password(form.password, user.hashed_password):
         logger.warning("login_failed", email=form.username)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    logger.info("user_login", user_id=user.id, email=user.email)
         AUTH_ATTEMPTS.labels(endpoint="login", outcome="failure").inc()
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    logger.info("user_login", user_id=user.id, email=user.email)
     AUTH_ATTEMPTS.labels(endpoint="login", outcome="success").inc()
     return TokenResponse(access_token=create_access_token(user.id))
 
