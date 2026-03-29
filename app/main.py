@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -71,6 +72,14 @@ app.include_router(health_router.router)
 app.include_router(auth_router.router)
 app.include_router(scan_router.router)
 app.include_router(billing_router.router)
+
+# Instrument all HTTP endpoints and expose /metrics in Prometheus text format.
+# The instrumentator collects: request count, request duration, response size,
+# and in-flight requests — all labelled by method, handler, and status code.
+Instrumentator(
+    should_group_status_codes=False,
+    excluded_handlers=["/metrics"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 @app.exception_handler(StarletteHTTPException)

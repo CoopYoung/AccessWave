@@ -19,3 +19,5 @@ slowapi==0.1.9
 alembic==1.13.3
 structlog==24.4.0
 celery[redis]==5.4.0
+prometheus-fastapi-instrumentator==6.1.0
+prometheus-client==0.20.0
