@@ -5,6 +5,7 @@ from typing import Literal
 
 
 import structlog
+import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl, field_validator
 import json
@@ -172,6 +173,24 @@ class SiteScoreHistory(BaseModel):
 class ChartDataOut(BaseModel):
     score_history: list[SiteScoreHistory]
     severity_totals: dict[str, int]
+class ShareTokenOut(BaseModel):
+    share_token: str
+    share_url: str
+
+
+class PublicScanOut(BaseModel):
+    id: int
+    site_name: str
+    site_url: str
+    status: str
+    pages_scanned: int
+    total_issues: int
+    critical_count: int
+    serious_count: int
+    moderate_count: int
+    minor_count: int
+    score: float | None
+    completed_at: datetime.datetime | None
 
 
 # --- Sites ---
@@ -604,3 +623,96 @@ async def _get_user_scan(scan_id: int, user_id: int, db: AsyncSession) -> Scan:
 async def _run_scan_task(scan_id: int, max_pages: int):
     """Wrapper to run scan in background."""
     await run_scan(scan_id, max_pages=max_pages)
+
+
+# --- Share ---
+
+@router.post("/scans/{scan_id}/share", response_model=ShareTokenOut)
+async def create_share_link(
+    request: Request,
+    scan_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate (or return existing) public share token for a completed scan."""
+    scan = await _get_user_scan(scan_id, user.id, db)
+    if scan.status != "completed":
+        raise HTTPException(status_code=400, detail="Only completed scans can be shared.")
+    if not scan.share_token:
+        scan.share_token = str(uuid.uuid4())
+        await db.commit()
+        await db.refresh(scan)
+    base = str(request.base_url).rstrip("/")
+    return ShareTokenOut(
+        share_token=scan.share_token,
+        share_url=f"{base}/share/{scan.share_token}",
+    )
+
+
+@router.delete("/scans/{scan_id}/share", status_code=204)
+async def revoke_share_link(
+    scan_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke the public share link for a scan."""
+    scan = await _get_user_scan(scan_id, user.id, db)
+    scan.share_token = None
+    await db.commit()
+
+
+@router.get("/share/{token}", response_model=PublicScanOut)
+async def get_public_scan(token: str, db: AsyncSession = Depends(get_db)):
+    """Public endpoint: fetch scan summary by share token (no auth required)."""
+    result = await db.execute(
+        select(Scan).join(Site).where(Scan.share_token == token)
+    )
+    scan = result.scalar_one_or_none()
+    if not scan or scan.status != "completed":
+        raise HTTPException(status_code=404, detail="Report not found or has been revoked.")
+    site_result = await db.execute(select(Site).where(Site.id == scan.site_id))
+    site = site_result.scalar_one()
+    return PublicScanOut(
+        id=scan.id,
+        site_name=site.name,
+        site_url=site.url,
+        status=scan.status,
+        pages_scanned=scan.pages_scanned,
+        total_issues=scan.total_issues,
+        critical_count=scan.critical_count,
+        serious_count=scan.serious_count,
+        moderate_count=scan.moderate_count,
+        minor_count=scan.minor_count,
+        score=scan.score,
+        completed_at=scan.completed_at,
+    )
+
+
+@router.get("/share/{token}/issues", response_model=list[IssueOut])
+async def get_public_scan_issues(
+    token: str,
+    severity: str | None = None,
+    limit: int = Query(default=100, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint: fetch issues for a shared scan (no auth required)."""
+    result = await db.execute(
+        select(Scan).where(Scan.share_token == token)
+    )
+    scan = result.scalar_one_or_none()
+    if not scan or scan.status != "completed":
+        raise HTTPException(status_code=404, detail="Report not found or has been revoked.")
+    query = select(Issue).where(Issue.scan_id == scan.id)
+    if severity:
+        query = query.where(Issue.severity == severity)
+    query = query.order_by(
+        case(
+            (Issue.severity == "critical", 0),
+            (Issue.severity == "serious", 1),
+            (Issue.severity == "moderate", 2),
+            else_=3,
+        ),
+        Issue.id,
+    ).limit(limit)
+    issues_result = await db.execute(query)
+    return issues_result.scalars().all()
