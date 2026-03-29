@@ -1,7 +1,10 @@
 import asyncio
 import datetime
+from ipaddress import AddressValueError, ip_address, ip_network
+from typing import Literal
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,10 +17,64 @@ from app.services.scan_runner import run_scan
 
 router = APIRouter(prefix="/api", tags=["scans"])
 
+# Private / reserved CIDR blocks that must not be scanned (SSRF protection)
+_BLOCKED_NETWORKS = [
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("127.0.0.0/8"),
+    ip_network("169.254.0.0/16"),   # link-local
+    ip_network("0.0.0.0/8"),
+    ip_network("100.64.0.0/10"),    # shared address space (RFC 6598)
+    ip_network("192.0.0.0/24"),     # IETF protocol assignments
+    ip_network("192.0.2.0/24"),     # TEST-NET-1
+    ip_network("198.51.100.0/24"),  # TEST-NET-2
+    ip_network("203.0.113.0/24"),   # TEST-NET-3
+    ip_network("240.0.0.0/4"),      # reserved
+    ip_network("::1/128"),
+    ip_network("fc00::/7"),
+    ip_network("fe80::/10"),
+]
+
+_BLOCKED_HOSTNAMES = frozenset({"localhost", "metadata.google.internal"})
+
 
 class SiteCreate(BaseModel):
     name: str
     url: HttpUrl
+
+    @field_validator("name")
+    @classmethod
+    def name_constraints(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Site name must not be empty")
+        if len(v) > 100:
+            raise ValueError("Site name must not exceed 100 characters")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def url_no_ssrf(cls, v: HttpUrl) -> HttpUrl:
+        host = v.host
+        if not host:
+            raise ValueError("URL must contain a valid host")
+
+        # Block well-known internal hostnames
+        if host.lower() in _BLOCKED_HOSTNAMES:
+            raise ValueError("URL must not point to a reserved hostname")
+
+        # If the host looks like an IP address, check private/reserved ranges
+        try:
+            addr = ip_address(host)
+            if any(addr in net for net in _BLOCKED_NETWORKS):
+                raise ValueError("URL must not point to a private or reserved IP address")
+        except (AddressValueError, ValueError) as exc:
+            # Re-raise our own errors; ignore AddressValueError (host is a domain name)
+            if "URL must not point" in str(exc):
+                raise
+
+        return v
 
 
 class SiteOut(BaseModel):
@@ -164,8 +221,10 @@ async def start_scan(
 
 @router.get("/sites/{site_id}/scans", response_model=list[ScanOut])
 async def list_scans(
-    site_id: int, limit: int = Query(default=20, le=50),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    site_id: int,
+    limit: int = Query(default=20, ge=1, le=50),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     await _get_user_site(site_id, user.id, db)
     result = await db.execute(
@@ -183,9 +242,9 @@ async def get_scan(scan_id: int, user: User = Depends(get_current_user), db: Asy
 @router.get("/scans/{scan_id}/issues", response_model=list[IssueOut])
 async def get_issues(
     scan_id: int,
-    severity: str | None = None,
-    rule_id: str | None = None,
-    limit: int = Query(default=100, le=500),
+    severity: Literal["critical", "serious", "moderate", "minor"] | None = None,
+    rule_id: str | None = Query(default=None, max_length=50),
+    limit: int = Query(default=100, ge=1, le=500),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
