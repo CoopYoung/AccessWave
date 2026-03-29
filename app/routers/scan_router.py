@@ -6,29 +6,21 @@ from typing import Literal
 
 import structlog
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, HttpUrl, field_validator
 import json
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from jose import JWTError, jwt
 import html as _html
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, HttpUrl
-from sqlalchemy import case, func, nullslast, select
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+from jose import JWTError, jwt
 from pydantic import BaseModel, HttpUrl, field_validator
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.config import settings
-from app.database import get_db
-from app.limiter import limiter
 from app.database import async_session, get_db
+from app.limiter import limiter
 from app.models import Issue, Scan, Site, User
 from app.services.scan_progress import get_progress
-from app.models import Issue, Scan, Site, User
 from app.scheduler import next_run_time
 from app.services.scan_runner import run_scan
 

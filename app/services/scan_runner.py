@@ -147,6 +147,7 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
             scan.status = "failed"
             scan.completed_at = datetime.datetime.utcnow()
             SCANS_FAILED.inc()
+            update_progress(scan.id, pages_done=0, pages_total=0, status="failed")
 
             # Fire scan.failed webhooks
             try:
@@ -166,7 +167,6 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
 
         finally:
             ACTIVE_SCANS.dec()
-            update_progress(scan.id, pages_done=0, pages_total=0, status="failed")
 
         await db.commit()
         # Keep the final progress entry briefly so SSE clients can receive it,

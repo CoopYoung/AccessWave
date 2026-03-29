@@ -1,15 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Log in - AccessWave</title><link rel="stylesheet" href="/static/css/style.css"><script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+</head>
 <body>
-    <nav><div class="container"><a href="/" class="logo">Access<span>Wave</span></a><div class="links"><button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button></div></div></nav>
-    <div class="auth-page"><div class="auth-card">
-        <h2>Welcome back</h2><p class="subtitle">Log in to your dashboard</p>
-        <div id="error-msg" class="error-msg"></div>
-        <form id="auth-form" novalidate>
-            <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com"></div>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <nav aria-label="Main navigation"><div class="container"><a href="/" class="logo">Access<span>Wave</span></a></div></nav>
+    <nav aria-label="Main navigation"><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
+            <a href="/register" class="btn btn-primary btn-sm">Start Free</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+        </div>
+    </div></nav>
+
     <main id="main-content">
     <div class="auth-page"><div class="auth-card">
         <h2>Welcome back</h2><p class="subtitle">Log in to your dashboard</p>
@@ -21,7 +31,9 @@
         </form>
         <p class="footer">No account? <a href="/register">Sign up free</a></p>
     </div></div>
-    <script src="/static/js/app.js"></script><script>initDarkMode(); initAuth('login');</script>
     </main>
-    <script src="/static/js/app.js"></script><script>initAuth('login');</script>
-</body></html>
+
+    <script src="/static/js/app.js"></script>
+    <script>initDarkMode(); initAuth('login');</script>
+</body>
+</html>

@@ -606,20 +606,11 @@ async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
 
     document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
-    document.getElementById('add-site-btn')?.addEventListener('click', () => document.getElementById('add-modal').classList.add('active'));
-    document.getElementById('close-modal')?.addEventListener('click', () => {
-        document.getElementById('add-modal').classList.remove('active');
-        const form = document.getElementById('site-form');
-        if (form) { form.reset(); clearFormValidation(form); }
-    });
-    document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
     document.getElementById('close-badge-modal')?.addEventListener('click', () => document.getElementById('badge-modal').classList.remove('active'));
     document.getElementById('badge-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
-    document.getElementById('site-form')?.addEventListener('submit', addSite);
     document.getElementById('close-edit-modal')?.addEventListener('click', () => document.getElementById('edit-modal').classList.remove('active'));
     document.getElementById('edit-site-form')?.addEventListener('submit', saveEditSite);
     // Close modals when clicking the backdrop
-    document.getElementById('add-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
     document.getElementById('edit-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
 
     // Add-site modal
@@ -662,9 +653,7 @@ async function initDashboard() {
         document.body.appendChild(tb);
     }
     await loadStats();
-    await Promise.all([loadSites(), loadCharts()]);
-    await Promise.all([loadSites(), loadActivityHeatmap()]);
-    await loadSites();
+    await Promise.all([loadSites(), loadCharts(), loadActivityHeatmap()]);
     initWcagPanel();
 }
 
@@ -737,11 +726,6 @@ async function loadStats() {
         animateCounter(document.getElementById('stat-issues'), s.total_issues);
         animateCounter(document.getElementById('stat-critical'), s.critical_issues);
         cachedStats = s;
-        setStatVal('stat-sites', s.total_sites);
-        setStatVal('stat-scans', s.total_scans);
-        setStatVal('stat-score', s.avg_score !== null ? s.avg_score : '--');
-        setStatVal('stat-issues', s.total_issues);
-        setStatVal('stat-critical', s.critical_issues);
         renderOnboardingChecklist(s);
     } catch (e) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('sk'); }); console.error(e); }
 }
@@ -1230,7 +1214,6 @@ function dismissOnboarding() {
 }
 
 async function openScan(scanId) {
-    currentScanId = scanId;
     localStorage.setItem('aw_reviewed_scan', '1');
     if (cachedStats) renderOnboardingChecklist(cachedStats);
     const el = document.getElementById('main-content');
@@ -1489,14 +1472,15 @@ async function addSite(e) {
     const form = e.target;
     const btn = form.querySelector('button[type=submit]');
     const origText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Adding\u2026';
     const nameInput = form.querySelector('[name=name]');
     const urlInput = form.querySelector('[name=url]');
 
     const nameOk = validateRequiredField(nameInput, 'Site name');
     const urlOk = validateURLField(urlInput);
     if (!nameOk || !urlOk) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Adding\u2026';
 
     try {
         await API.req('POST', '/sites', { name: nameInput.value.trim(), url: urlInput.value.trim() });

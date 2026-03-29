@@ -1,16 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Sign up - AccessWave</title><link rel="stylesheet" href="/static/css/style.css"><script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+</head>
 <body>
-    <nav><div class="container"><a href="/" class="logo">Access<span>Wave</span></a><div class="links"><button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button></div></div></nav>
-    <div class="auth-page"><div class="auth-card">
-        <h2>Create your account</h2><p class="subtitle">Scan your first site in 30 seconds</p>
-        <div id="error-msg" class="error-msg"></div>
-        <form id="auth-form" novalidate>
-            <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com"></div>
-            <div class="form-group"><label for="password">Password</label><input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Min 8 characters"></div>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <nav aria-label="Main navigation"><div class="container"><a href="/" class="logo">Access<span>Wave</span></a></div></nav>
+    <nav aria-label="Main navigation"><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
+            <a href="/login">Log in</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+        </div>
+    </div></nav>
+
     <main id="main-content">
     <div class="auth-page"><div class="auth-card">
         <h2>Create your account</h2><p class="subtitle">Scan your first site in 30 seconds</p>
@@ -22,7 +31,9 @@
         </form>
         <p class="footer">Already have an account? <a href="/login">Log in</a></p>
     </div></div>
-    <script src="/static/js/app.js"></script><script>initDarkMode(); initAuth('register');</script>
     </main>
-    <script src="/static/js/app.js"></script><script>initAuth('register');</script>
-</body></html>
+
+    <script src="/static/js/app.js"></script>
+    <script>initDarkMode(); initAuth('register');</script>
+</body>
+</html>

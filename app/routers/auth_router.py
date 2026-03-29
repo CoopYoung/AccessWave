@@ -73,7 +73,6 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         logger.warning("register_duplicate_email", email=body.email)
-        raise HTTPException(status_code=400, detail="Email already registered")
         AUTH_ATTEMPTS.labels(endpoint="register", outcome="failure").inc()
         raise HTTPException(status_code=400, detail="Email already registered")
     if len(body.password) < 8:
