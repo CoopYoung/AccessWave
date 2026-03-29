@@ -507,6 +507,9 @@ async function initDashboard() {
         const form = document.getElementById('site-form');
         if (form) { form.reset(); clearFormValidation(form); }
     });
+    document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
+    document.getElementById('close-badge-modal')?.addEventListener('click', () => document.getElementById('badge-modal').classList.remove('active'));
+    document.getElementById('badge-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
     document.getElementById('site-form')?.addEventListener('submit', addSite);
     document.getElementById('close-edit-modal')?.addEventListener('click', () => document.getElementById('edit-modal').classList.remove('active'));
     document.getElementById('edit-site-form')?.addEventListener('submit', saveEditSite);
@@ -642,6 +645,7 @@ async function loadSites() {
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})">Scan Now</button>
                     <button class="btn btn-sm btn-edit" aria-label="Edit ${esc(s.name)}" onclick="event.stopPropagation();openEditSite(${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.url).replace(/'/g,"\\'")}')">Edit</button>
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id},this)">Scan Now</button>
+                    <button class="btn btn-sm btn-outline" data-site-id="${s.id}" data-site-name="${esc(s.name)}" onclick="event.stopPropagation();showBadge(this.dataset.siteId,this.dataset.siteName)">Badge</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})" aria-label="Scan ${esc(s.name)} now">Scan Now</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
@@ -1297,6 +1301,29 @@ async function saveEditSite(e) {
     } finally {
         btn.disabled = false;
     }
+// Badge
+function showBadge(siteId, siteName) {
+    const badgeUrl = `${window.location.origin}/api/sites/${siteId}/badge.svg`;
+    document.getElementById('badge-img').src = badgeUrl;
+    document.getElementById('badge-img').alt = `Accessibility score badge for ${siteName}`;
+    document.getElementById('badge-site-name').textContent = siteName;
+    document.getElementById('badge-html-code').textContent =
+        `<img src="${badgeUrl}" alt="accessibility score" />`;
+    document.getElementById('badge-md-code').textContent =
+        `![accessibility score](${badgeUrl})`;
+    document.getElementById('badge-modal').classList.add('active');
+    document.getElementById('close-badge-modal').focus();
+}
+
+function copyBadgeCode(type) {
+    const id = type === 'html' ? 'badge-html-code' : 'badge-md-code';
+    const text = document.getElementById(id).textContent;
+    const btn = document.querySelector(`[onclick="copyBadgeCode('${type}')"]`);
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => showToast('Copy failed — please copy manually', 'error'));
 }
 
 async function upgradePlan(plan) {
