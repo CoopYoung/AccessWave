@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.database import init_db
 from app.limiter import limiter
-from app.routers import auth_router, billing_router, scan_router
+from app.routers import auth_router, billing_router, health_router, scan_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("accesswave")
@@ -31,6 +31,7 @@ app.add_middleware(SlowAPIMiddleware)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+app.include_router(health_router.router)
 app.include_router(auth_router.router)
 app.include_router(scan_router.router)
 app.include_router(billing_router.router)
