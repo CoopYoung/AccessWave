@@ -363,18 +363,6 @@ function clearFormValidation(form) {
         const errEl = el.closest('.form-group')?.querySelector('.field-error');
         if (errEl) errEl.classList.remove('visible');
     });
-function showToast(msg, type = 'success') {
-    let c = document.querySelector('.toast-container');
-    if (!c) {
-        c = document.createElement('div');
-        c.className = 'toast-container';
-        c.setAttribute('role', 'status');
-        c.setAttribute('aria-live', 'polite');
-        c.setAttribute('aria-atomic', 'true');
-        document.body.appendChild(c);
-    }
-    const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
-    setTimeout(() => { t.style.animation = 'toast-in 0.3s ease reverse forwards'; setTimeout(() => t.remove(), 300); }, 3000);
 }
 
 // ── Focus trap ────────────────────────────────────────────────────────────────
@@ -441,11 +429,6 @@ function initAuth(type) {
     }
 
     form.addEventListener('submit', async (e) => {
-        e.preventDefault(); err.style.display = 'none';
-        const btn = form.querySelector('button[type=submit]');
-        const origText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="spinner" aria-hidden="true"></span>${type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026'}`;
         e.preventDefault();
         globalErr.style.display = 'none';
 
@@ -455,9 +438,9 @@ function initAuth(type) {
         if (!emailOk || !pwOk) return;
 
         const btn = form.querySelector('button[type=submit]');
-        const origLabel = btn.textContent;
+        const origText = btn.innerHTML;
         btn.disabled = true;
-        btn.textContent = type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026';
+        btn.innerHTML = `<span class="spinner" aria-hidden="true"></span>${type === 'register' ? 'Creating account\u2026' : 'Signing in\u2026'}`;
         try {
             let data;
             if (type === 'register') {
@@ -471,12 +454,11 @@ function initAuth(type) {
                 if (!r.ok) throw new Error(data.detail || 'Login failed');
             }
             API.setToken(data.access_token); window.location.href = '/dashboard';
-        } catch (e) { err.textContent = e.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = origText; }
         } catch (err) {
             globalErr.textContent = err.message;
             globalErr.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = origLabel;
+            btn.innerHTML = origText;
         }
     });
 }
@@ -755,18 +737,12 @@ async function loadStats() {
         animateCounter(document.getElementById('stat-issues'), s.total_issues);
         animateCounter(document.getElementById('stat-critical'), s.critical_issues);
         cachedStats = s;
-        document.getElementById('stat-sites').textContent = s.total_sites;
-        document.getElementById('stat-scans').textContent = s.total_scans;
-        document.getElementById('stat-score').textContent = s.avg_score !== null ? s.avg_score : '--';
-        document.getElementById('stat-issues').textContent = s.total_issues;
-        document.getElementById('stat-critical').textContent = s.critical_issues;
-        renderOnboardingChecklist(s);
-    } catch (e) { console.error(e); }
         setStatVal('stat-sites', s.total_sites);
         setStatVal('stat-scans', s.total_scans);
         setStatVal('stat-score', s.avg_score !== null ? s.avg_score : '--');
         setStatVal('stat-issues', s.total_issues);
         setStatVal('stat-critical', s.critical_issues);
+        renderOnboardingChecklist(s);
     } catch (e) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('sk'); }); console.error(e); }
 }
 
@@ -776,88 +752,6 @@ async function loadSites() {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="sites-list" aria-busy="true" aria-label="Loading sites">${skSiteCards(3)}</div>`;
     currentView = 'sites'; currentSiteId = null; currentScanId = null;
-    const el = document.getElementById('dash-content');
-    try {
-        const sites = await API.req('GET', '/sites');
-        if (!sites?.length) {
-            el.innerHTML = `
-                <div class="onboarding-welcome" role="region" aria-label="Getting started with AccessWave">
-                    <div class="welcome-icon" aria-hidden="true">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="20" cy="20" r="16" fill="var(--primary)" fill-opacity=".12"/>
-                            <circle cx="20" cy="20" r="12" stroke="var(--primary)" stroke-width="2" fill="none"/>
-                            <path d="M13 20l5 5 9-9" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <h2>Welcome to AccessWave</h2>
-                    <p class="subtitle">Scan your websites for WCAG 2.1 accessibility issues and build a more inclusive web.</p>
-                    <button class="btn btn-primary" onclick="document.getElementById('add-site-btn').click()">+ Add Your First Site</button>
-                    <div class="onboarding-steps" role="list" aria-label="How AccessWave works">
-                        <div class="onboarding-step" role="listitem">
-                            <div class="step-num" aria-hidden="true">1</div>
-                            <h4>Add a site</h4>
-                            <p>Enter your website URL to get started. We support any publicly accessible URL.</p>
-                        </div>
-                        <div class="onboarding-step" role="listitem">
-                            <div class="step-num" aria-hidden="true">2</div>
-                            <h4>Run a scan</h4>
-                            <p>AccessWave crawls your pages and checks them against WCAG 2.1 guidelines automatically.</p>
-                        </div>
-                        <div class="onboarding-step" role="listitem">
-                            <div class="step-num" aria-hidden="true">3</div>
-                            <h4>Fix issues</h4>
-                            <p>Review detailed reports with code snippets and step-by-step guidance for every issue.</p>
-                        </div>
-                    </div>
-                </div>`;
-            return;
-        }
-        el.innerHTML = `<div class="sites-list">${sites.map(s => `
-            <div class="site-card" tabindex="0" role="button" data-action="open-site" data-site-id="${s.id}" onclick="openSite(${s.id})" aria-label="View scans for ${esc(s.name)}">
-                <div class="site-info">
-                    ${s.last_score !== null ? `<div class="score-ring ${scoreClass(s.last_score)}" aria-label="Score: ${s.last_score.toFixed(0)}">${s.last_score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)" aria-label="Not yet scored">--</div>`}
-                    <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
-                </div>
-                <div class="site-meta">
-                    <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
-                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})">Scan Now</button>
-                    <button class="btn btn-sm btn-edit" aria-label="Edit ${esc(s.name)}" onclick="event.stopPropagation();openEditSite(${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.url).replace(/'/g,"\\'")}')">Edit</button>
-                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id},this)">Scan Now</button>
-                    <button class="btn btn-sm btn-outline" data-site-id="${s.id}" data-site-name="${esc(s.name)}" onclick="event.stopPropagation();showBadge(this.dataset.siteId,this.dataset.siteName)">Badge</button>
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
-                    <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})" aria-label="Scan ${esc(s.name)} now">Scan Now</button>
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})" aria-label="Delete ${esc(s.name)}">Delete</button>
-                </div>
-            </div>`).join('')}</div>`;
-        el.innerHTML = `
-            <div class="sites-toolbar">
-                <label class="select-all-label">
-                    <input type="checkbox" id="select-all-check" onchange="toggleSelectAll(this)" aria-label="Select all sites">
-                    <span>Select all</span>
-                </label>
-                <span class="selection-info" id="selection-info" aria-live="polite"></span>
-            </div>
-            <div class="sites-list">${sites.map(s => {
-                const scoreHtml = s.last_score !== null
-                    ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
-                    : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">--</div>`;
-                return `
-                <div class="site-card" data-site-id="${s.id}">
-                    <label class="site-check-wrap">
-                        <input type="checkbox" class="site-check" onchange="toggleSiteSelect(${s.id}, this)" aria-label="Select ${esc(s.name)}">
-                    </label>
-                    <div class="site-clickable" onclick="openSite(${s.id})" role="button" tabindex="0"
-                         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
-                        ${scoreHtml}
-                        <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
-                    </div>
-                    <div class="site-meta">
-                        <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
-                        <button class="btn btn-sm btn-green" onclick="startScan(${s.id})">Scan Now</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteSite(${s.id})">Delete</button>
-                    </div>
-                </div>`;
-            }).join('')}</div>`;
     try {
         const sites = await API.req('GET', '/sites');
         sitesData = sites || [];
@@ -960,59 +854,9 @@ async function openSite(siteId) {
     const el = document.getElementById('main-content');
     el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
         <div class="sites-list" aria-busy="true" aria-label="Loading scans">${skSiteCards(3)}</div>`;
-    currentView = 'scans'; currentSiteId = siteId; currentScanId = null;
-    const el = document.getElementById('dash-content');
-    el.innerHTML = '<p style="color:var(--text-muted)">Loading scans...</p>';
-    el.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    currentView = 'scans'; currentScanId = null;
     try {
         const sites = await API.req('GET', '/sites');
-        const site = sites.find(s => s.id === siteId);
-        if (!scans?.length) {
-            el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
-                <div class="empty-state"><div class="icon">\uD83D\uDD0D</div><p>No scans yet for ${esc(site?.name || '')}</p>
-                <button class="btn btn-green" onclick="startScan(${siteId},this)">Run First Scan</button></div>`;
-            el.innerHTML = `
-                <a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
-                <div class="scan-empty" role="region" aria-label="No scans yet for ${esc(site?.name || 'this site')}">
-                    <div class="scan-icon" aria-hidden="true">
-                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="14" cy="14" r="8" stroke="var(--blue)" stroke-width="2" fill="none"/>
-                            <path d="M20 20l6 6" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <h3>No scans yet for ${esc(site?.name || 'this site')}</h3>
-                    <p class="subtitle">Run your first scan to get an accessibility score and discover issues to fix.</p>
-                    <button class="btn btn-green" onclick="startScan(${siteId})">Run First Scan</button>
-                    <div class="scan-expectations" role="list" aria-label="What to expect from a scan">
-                        <div class="scan-expect-item" role="listitem">
-                            <div class="exp-icon" aria-hidden="true">🕷️</div>
-                            <strong>Crawls pages</strong>
-                            <p>Follows links from your homepage to discover all accessible pages.</p>
-                        </div>
-                        <div class="scan-expect-item" role="listitem">
-                            <div class="exp-icon" aria-hidden="true">♿</div>
-                            <strong>Checks WCAG 2.1</strong>
-                            <p>50+ rules covering contrast, semantics, keyboard navigation and more.</p>
-                        </div>
-                        <div class="scan-expect-item" role="listitem">
-                            <div class="exp-icon" aria-hidden="true">📊</div>
-                            <strong>Score 0–100</strong>
-                            <p>Get a clear accessibility score with issues ranked by severity.</p>
-                        </div>
-                    </div>
-                </div>`;
-            return;
-        }
-        const completedScans = scans.filter(s => s.status === 'completed');
-        const compareBtn = completedScans.length >= 2
-            ? `<button class="btn btn-outline btn-sm" id="compare-toggle-btn" onclick="toggleCompareMode()" aria-pressed="false">Compare Scans</button>`
-            : '';
-        el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
-            <h2 style="margin-bottom:16px">${esc(site?.name || '')}</h2>
-            <div class="sites-list">${scans.map(s => `
-                <div class="site-card" tabindex="0" role="button" data-action="open-scan" data-scan-id="${s.id}" onclick="openScan(${s.id})" aria-label="View details for Scan #${s.id}, status: ${s.status}">
-                    <div class="site-info">
-                        ${s.score !== null ? `<div class="score-ring ${scoreClass(s.score)}" aria-label="Score: ${s.score.toFixed(0)}">${s.score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)" aria-label="${s.status === 'running' ? 'Scan running' : 'No score yet'}">${s.status === 'running' ? '...' : '--'}</div>`}
         const site = sites?.find(s => s.id === siteId);
         el.innerHTML = `
             <a href="#" class="back-link" onclick="loadSites();return false">&#x2190; Back to sites</a>
@@ -1167,13 +1011,6 @@ async function changeScanPage(delta) {
     scanPage = Math.max(0, scanPage + delta);
     await _renderScans(currentSiteId);
     document.getElementById('scan-list')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h2>${esc(site?.name || '')}</h2>
-                ${compareBtn}
-            </div>
-            <div id="compare-toolbar" style="display:none" role="status" aria-live="polite"></div>
-            <div class="sites-list" id="scans-list">${renderScanCards(scans)}</div>`;
-    } catch (e) { console.error(e); }
 }
 
 function renderScanCards(scans) {
@@ -1349,6 +1186,8 @@ function showComparisonModal(r) {
     document.body.appendChild(modal);
     // Focus the close button for accessibility
     modal.querySelector('button[aria-label="Close comparison"]')?.focus();
+}
+
 function renderOnboardingChecklist(stats) {
     const banner = document.getElementById('onboarding-banner');
     if (!banner) return;
@@ -1410,8 +1249,6 @@ async function openScan(scanId) {
         <div class="sk" style="height:18px;width:130px;margin-bottom:12px"></div>
         <div class="issues-list" aria-busy="true" aria-label="Loading issues">${skIssueCards(4)}</div>`;
     currentView = 'scan-detail'; currentScanId = scanId;
-    const el = document.getElementById('dash-content');
-    el.innerHTML = '<p style="color:var(--text-muted)">Loading issues...</p>';
     try {
         const [scan, issues] = await Promise.all([
             API.req('GET', `/scans/${scanId}`),
@@ -1465,14 +1302,10 @@ async function openScan(scanId) {
         el.innerHTML = `
             <a href="#" class="back-link" onclick="openSite(${scan.site_id});return false">&larr; Back to scans</a>
             <div class="scan-detail">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                <div class="scan-detail-header">
-                    <h3>Scan #${scan.id}</h3>
-                    ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem" aria-label="Accessibility score: ${scan.score.toFixed(0)} out of 100">${scan.score.toFixed(0)}</div>` : ''}
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
                     <h3>Scan #${scan.id}</h3>
                     <div style="display:flex;align-items:center;gap:12px">
-                        ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
+                        ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem" aria-label="Accessibility score: ${scan.score.toFixed(0)} out of 100">${scan.score.toFixed(0)}</div>` : ''}
                         ${scan.status === 'completed' ? `<button class="btn btn-outline btn-sm" id="share-btn-${scan.id}" onclick="toggleSharePanel(${scan.id})" aria-expanded="false" aria-controls="share-panel-${scan.id}">&#x1F517; Share</button>` : ''}
                     </div>
                 </div>
@@ -1489,15 +1322,8 @@ async function openScan(scanId) {
                         </div>
                     </div>
                 </div>
-                <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
-                <div class="severity-bar">
-                    <span class="severity-count" style="background:var(--red-light);color:var(--red)">${scan.critical_count} Critical</span>
-                    <span class="severity-count" style="background:var(--serious-light);color:var(--serious)">${scan.serious_count} Serious</span>
-                    <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
-                    <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
                 <div class="scan-summary">
                     <div class="scan-summary-info">
-                        <h3>Scan #${scan.id}</h3>
                         <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
                         <div class="severity-bar">
                             <span class="severity-count" style="background:var(--red-light);color:var(--red)">${scan.critical_count} Critical</span>
@@ -1517,19 +1343,6 @@ async function openScan(scanId) {
                     <span aria-hidden="true">&#8595;</span> Export PDF
                 </button>
             </div>
-            <h3 style="margin-bottom:12px">Issues (${issues.length})</h3>
-            <div class="issues-list">${issues.map(i => `
-                <div class="issue-card">
-                    <div class="issue-header">
-                        <span class="badge badge-${i.severity}">${i.severity}</span>
-                        ${i.wcag_criteria ? `<button class="wcag-btn" onclick="window._wcagPanelTrigger=this;openWcagPanel('${esc(i.wcag_criteria)}')" aria-label="Open WCAG ${esc(i.wcag_criteria)} reference">WCAG ${esc(i.wcag_criteria)}</button>` : ''}
-                        <span style="color:var(--text-dim);font-size:0.82rem">${i.rule_id}</span>
-                    </div>
-                    <div class="issue-message">${esc(i.message)}</div>
-                    <div class="issue-url" style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>
-                    ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
-                    ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
-                </div>`).join('')}</div>`;
             <div class="issues-header">
                 <h3>Issues (${issues.length})</h3>
                 ${issues.length ? `<button class="btn btn-sm btn-outline" onclick="expandAllIssues()">Expand All</button>` : ''}
@@ -1562,6 +1375,8 @@ function toggleSection(btn) {
 function expandAllIssues() {
     document.querySelectorAll('.issue-group-header[aria-expanded="false"]').forEach(toggleGroup);
     document.querySelectorAll('.issue-toggle[aria-expanded="false"]').forEach(toggleSection);
+}
+
 function exportCSV() {
     if (!currentIssues.length) { showToast('No issues to export', 'info'); return; }
     const headers = ['Severity', 'WCAG Criteria', 'Rule ID', 'Message', 'Page URL', 'Selector', 'How to Fix'];
@@ -1667,82 +1482,6 @@ async function exportPDF() {
 
     doc.save(`scan-${currentScanId}-report.pdf`);
     showToast('PDF downloaded');
-            <div class="issues-toolbar">
-                <h3>Issues (${issues.length})</h3>
-                <div class="group-toggle" role="group" aria-label="Group issues by">
-                    <button class="group-btn active" id="group-btn-severity" onclick="switchIssueGroup('severity')" aria-pressed="true">By Severity</button>
-                    <button class="group-btn" id="group-btn-page" onclick="switchIssueGroup('page')" aria-pressed="false">By Page</button>
-                </div>
-            </div>
-            <div id="issues-container"></div>`;
-        el._scanIssues = issues;
-        renderIssuesBySeverity(issues);
-    } catch (e) { console.error(e); }
-}
-
-function issueCardHtml(i, showUrl = true) {
-    return `<div class="issue-card">
-        <div class="issue-header">
-            <span class="badge badge-${i.severity}">${i.severity}</span>
-            ${i.wcag_criteria ? `<span class="wcag">WCAG ${i.wcag_criteria}</span>` : ''}
-            <span style="color:var(--text-dim);font-size:0.82rem">${esc(i.rule_id)}</span>
-        </div>
-        <div class="issue-message">${esc(i.message)}</div>
-        ${showUrl ? `<div style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>` : ''}
-        ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
-        ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
-    </div>`;
-}
-
-function renderIssuesBySeverity(issues) {
-    const container = document.getElementById('issues-container');
-    if (!container) return;
-    container.innerHTML = `<div class="issues-list">${issues.map(i => issueCardHtml(i)).join('')}</div>`;
-}
-
-function renderIssuesByPage(issues) {
-    const container = document.getElementById('issues-container');
-    if (!container) return;
-    const groups = {};
-    for (const issue of issues) {
-        if (!groups[issue.page_url]) groups[issue.page_url] = [];
-        groups[issue.page_url].push(issue);
-    }
-    const urls = Object.keys(groups).sort();
-    container.innerHTML = urls.map((url, idx) => {
-        const count = groups[url].length;
-        const groupId = `pg-${idx}`;
-        return `<div class="page-group">
-            <button class="page-group-header" onclick="togglePageGroup(this,'${groupId}')" aria-expanded="true" aria-controls="${groupId}">
-                <span class="page-group-chevron" aria-hidden="true">▾</span>
-                <span class="page-group-url">${esc(url)}</span>
-                <span class="page-group-count">${count} issue${count !== 1 ? 's' : ''}</span>
-            </button>
-            <div class="page-group-issues" id="${groupId}">
-                <div class="issues-list">${groups[url].map(i => issueCardHtml(i, false)).join('')}</div>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function switchIssueGroup(mode) {
-    const el = document.getElementById('main-content');
-    const isSeverity = mode === 'severity';
-    const btnSev = document.getElementById('group-btn-severity');
-    const btnPage = document.getElementById('group-btn-page');
-    if (btnSev) { btnSev.classList.toggle('active', isSeverity); btnSev.setAttribute('aria-pressed', isSeverity); }
-    if (btnPage) { btnPage.classList.toggle('active', !isSeverity); btnPage.setAttribute('aria-pressed', !isSeverity); }
-    if (isSeverity) renderIssuesBySeverity(el._scanIssues || []);
-    else renderIssuesByPage(el._scanIssues || []);
-}
-
-function togglePageGroup(btn, groupId) {
-    const expanded = btn.getAttribute('aria-expanded') === 'true';
-    btn.setAttribute('aria-expanded', String(!expanded));
-    const panel = document.getElementById(groupId);
-    if (panel) panel.hidden = expanded;
-    const chevron = btn.querySelector('.page-group-chevron');
-    if (chevron) chevron.style.transform = expanded ? 'rotate(-90deg)' : '';
 }
 
 async function addSite(e) {
@@ -1761,9 +1500,6 @@ async function addSite(e) {
 
     try {
         await API.req('POST', '/sites', { name: nameInput.value.trim(), url: urlInput.value.trim() });
-        const site = await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
-        document.getElementById('add-modal').classList.remove('active');
-        await API.req('POST', '/sites', { name: form.name.value, url: form.url.value });
         closeAddModal?.();
         form.reset();
         clearFormValidation(form);
@@ -1774,7 +1510,6 @@ async function addSite(e) {
         btn.disabled = false;
         btn.innerHTML = origText;
     }
-    } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function startScan(siteId, btn) {
@@ -1783,42 +1518,7 @@ async function startScan(siteId, btn) {
         btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Scanning\u2026';
     }
 
-    // Inject a live progress banner at top of main-content
-    const banner = document.createElement('div');
-    banner.className = 'scan-progress';
-    banner.setAttribute('role', 'status');
-    banner.setAttribute('aria-live', 'polite');
-    banner.setAttribute('aria-label', 'Scan in progress');
-    banner.innerHTML = `
-        <span class="sp-text"><span class="spinner" aria-hidden="true"></span>Scanning\u2026</span>
-        <div class="scan-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Scan progress">
-            <div class="scan-progress-bar" style="width:0%"></div>
-        </div>
-        <span class="sp-pct" aria-hidden="true">0%</span>`;
-    document.getElementById('main-content').prepend(banner);
-
-    let pct = 0;
-    const iv = setInterval(() => {
-        pct = Math.min(pct + Math.random() * 4 + 1.5, 90);
-        const bar = banner.querySelector('.scan-progress-bar');
-        const track = banner.querySelector('[role=progressbar]');
-        const pctEl = banner.querySelector('.sp-pct');
-        if (bar) bar.style.width = pct.toFixed(0) + '%';
-        if (track) track.setAttribute('aria-valuenow', pct.toFixed(0));
-        if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
-    }, 500);
-
     try {
-        await API.req('POST', `/sites/${siteId}/scan`);
-        showToast('Scan started!');
-        setTimeout(async () => {
-            clearInterval(iv);
-            const bar = banner.querySelector('.scan-progress-bar');
-            const track = banner.querySelector('[role=progressbar]');
-            const pctEl = banner.querySelector('.sp-pct');
-            if (bar) bar.style.width = '100%';
-            if (track) track.setAttribute('aria-valuenow', '100');
-            if (pctEl) pctEl.textContent = '100%';
         const scan = await API.req('POST', `/sites/${siteId}/scan`);
         if (!scan) return;
         showToast('Scan started!');
@@ -1897,24 +1597,11 @@ function trackScanProgress(siteId, scanId) {
         es.close();
         const text = document.getElementById(`scan-progress-text-${siteId}`);
         if (text) text.textContent = 'Lost connection — refreshing…';
-async function startScan(siteId) {
-    try {
-        await API.req('POST', `/sites/${siteId}/scan`);
-        showToast('Scan started! Refresh in a few seconds to see results.');
         setTimeout(async () => {
-            banner?.remove();
+            banner.remove();
             await loadStats();
-            await loadCharts();
             if (currentSiteId === siteId) await openSite(siteId);
             else await loadSites();
-            banner.remove();
-        }, 8000);
-    } catch (e) {
-        clearInterval(iv);
-        banner.remove();
-        if (btn) { btn.disabled = false; btn.textContent = 'Scan Now'; }
-        showToast(e.message, 'error');
-    }
         }, 3000);
     };
 }
@@ -1956,6 +1643,8 @@ async function saveEditSite(e) {
     } finally {
         btn.disabled = false;
     }
+}
+
 // Badge
 function showBadge(siteId, siteName) {
     const badgeUrl = `${window.location.origin}/api/sites/${siteId}/badge.svg`;
@@ -2102,6 +1791,8 @@ function _renderSeverityChart(totals) {
             },
         },
     });
+}
+
 // Settings page
 async function initSettings() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
@@ -2213,6 +1904,8 @@ function hideBanner(el) {
     if (!el) return;
     el.hidden = true;
     el.textContent = '';
+}
+
 // Share
 function toggleSharePanel(scanId) {
     const panel = document.getElementById(`share-panel-${scanId}`);
@@ -2259,6 +1952,8 @@ async function revokeShareLink(scanId) {
         input.value = '';
         showToast('Share link revoked.', 'info');
     } catch (e) { showToast(e.message, 'error'); }
+}
+
 // --- Activity Heatmap ---
 
 async function loadActivityHeatmap() {
@@ -2419,6 +2114,8 @@ function heatmapColor(entry) {
     if (s >= 50) return 'var(--heatmap-ok)';
     if (s >= 30) return 'var(--heatmap-warn)';
     return 'var(--heatmap-bad)';
+}
+
 // --- WCAG 2.1 Reference Panel ---
 
 const WCAG_CRITERIA = {

@@ -4,7 +4,6 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,14 +15,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.database import init_db
-from app.errors import http_exception_handler, unhandled_exception_handler, validation_exception_handler
+from app.errors import http_exception_handler as _http_exc_handler, unhandled_exception_handler as _unhandled_exc_handler, validation_exception_handler
 from app.limiter import limiter
-from app.routers import auth_router, billing_router, health_router, scan_router
 from app.logging_config import configure_logging
-from app.routers import auth_router, billing_router, scan_router
-from app.security_headers import SecurityHeadersMiddleware
-from app.routers import api_keys_router
+from app.routers import auth_router, billing_router, health_router, scan_router, api_keys_router
 from app.scheduler import start_scheduler, stop_scheduler
+from app.security_headers import SecurityHeadersMiddleware
 
 configure_logging(log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
 logger = structlog.get_logger("accesswave")
@@ -50,9 +47,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Global handlers — registered after the rate-limit handler so slowapi wins on 429.
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.add_middleware(SlowAPIMiddleware)
 

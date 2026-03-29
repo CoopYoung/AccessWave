@@ -517,6 +517,7 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
     .auth-card { padding: 28px 16px; }
     .dash-header h1 { font-size: 1.4rem; }
     .stat-card .value { font-size: 1.25rem; }
+}
 /* === Loading states === */
 @keyframes shimmer {
     0%   { background-position: -800px 0; }
@@ -1010,6 +1011,7 @@ kbd {
     .settings-page { padding: 24px 0 48px; }
     .compare-delta-grid { grid-template-columns: repeat(3, 1fr); }
     .compare-header { grid-template-columns: 1fr; } .compare-arrow { display: none; }
+}
 /* Share panel (inside scan detail) */
 .share-panel { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
 .share-panel-inner { background: var(--surface-2); border-radius: 10px; padding: 16px; }
