@@ -12,7 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, HttpUrl
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -268,13 +268,27 @@ async def start_scan(
 async def list_scans(
     site_id: int,
     limit: int = Query(default=20, ge=1, le=50),
+    status: str | None = Query(default=None),
+    min_score: float | None = Query(default=None, ge=0, le=100),
+    max_score: float | None = Query(default=None, ge=0, le=100),
+    sort: str = Query(default="created_at", pattern="^(created_at|score|total_issues)$"),
+    order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_user_site(site_id, user.id, db)
-    result = await db.execute(
-        select(Scan).where(Scan.site_id == site_id).order_by(Scan.created_at.desc()).limit(limit)
-    )
+    query = select(Scan).where(Scan.site_id == site_id)
+    if status:
+        query = query.where(Scan.status == status)
+    if min_score is not None:
+        query = query.where(Scan.score >= min_score)
+    if max_score is not None:
+        query = query.where(Scan.score <= max_score)
+    sort_col = getattr(Scan, sort)
+    order_expr = sort_col.desc() if order == "desc" else sort_col.asc()
+    result = await db.execute(query.order_by(nullslast(order_expr)).offset(offset).limit(limit))
     return result.scalars().all()
 
 

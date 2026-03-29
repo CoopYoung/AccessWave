@@ -492,6 +492,11 @@ let currentIssues = [];
 let closeAddModal = null;
 let closeShortcutsModal = null;
 
+// Scan filter & pagination state
+let scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
+let scanPage = 0;
+const SCAN_PAGE_SIZE = 10;
+
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
 
@@ -647,14 +652,16 @@ async function loadSites() {
 
 async function openSite(siteId) {
     currentSiteId = siteId;
+    scanPage = 0;
+    scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
     const el = document.getElementById('main-content');
     el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
         <div class="sites-list" aria-busy="true" aria-label="Loading scans">${skSiteCards(3)}</div>`;
     currentView = 'scans'; currentSiteId = siteId; currentScanId = null;
     const el = document.getElementById('dash-content');
     el.innerHTML = '<p style="color:var(--text-muted)">Loading scans...</p>';
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
     try {
-        const scans = await API.req('GET', `/sites/${siteId}/scans`);
         const sites = await API.req('GET', '/sites');
         const site = sites.find(s => s.id === siteId);
         if (!scans?.length) {
@@ -669,9 +676,129 @@ async function openSite(siteId) {
                 <div class="site-card" tabindex="0" role="button" data-action="open-scan" data-scan-id="${s.id}" onclick="openScan(${s.id})" aria-label="View details for Scan #${s.id}, status: ${s.status}">
                     <div class="site-info">
                         ${s.score !== null ? `<div class="score-ring ${scoreClass(s.score)}" aria-label="Score: ${s.score.toFixed(0)}">${s.score.toFixed(0)}</div>` : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)" aria-label="${s.status === 'running' ? 'Scan running' : 'No score yet'}">${s.status === 'running' ? '...' : '--'}</div>`}
+        const site = sites?.find(s => s.id === siteId);
+        el.innerHTML = `
+            <a href="#" class="back-link" onclick="loadSites();return false">&#x2190; Back to sites</a>
+            <div class="site-header">
+                <h2>${esc(site?.name || 'Site')}</h2>
+                <button class="btn btn-sm btn-green" onclick="startScan(${siteId})">Scan Now</button>
+            </div>
+            <details class="scan-filters" id="scan-filter-panel">
+                <summary class="filter-summary">Filter &amp; Sort
+                    <span id="filter-badge" class="filter-active-badge" hidden aria-label="Filters are active"></span>
+                </summary>
+                <div class="filter-fields">
+                    <div class="filter-group">
+                        <label for="filter-status">Status</label>
+                        <select id="filter-status" onchange="scanFilters.status=this.value">
+                            <option value="">All statuses</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                            <option value="running">Running</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-min-score">Min score</label>
+                        <input type="number" id="filter-min-score" min="0" max="100" placeholder="0"
+                            oninput="scanFilters.min_score=this.value" class="filter-input">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-max-score">Max score</label>
+                        <input type="number" id="filter-max-score" min="0" max="100" placeholder="100"
+                            oninput="scanFilters.max_score=this.value" class="filter-input">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-sort">Sort by</label>
+                        <select id="filter-sort" onchange="scanFilters.sort=this.value">
+                            <option value="created_at">Date</option>
+                            <option value="score">Score</option>
+                            <option value="total_issues">Issues</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-order">Order</label>
+                        <select id="filter-order" onchange="scanFilters.order=this.value">
+                            <option value="desc">Newest first</option>
+                            <option value="asc">Oldest first</option>
+                        </select>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-sm btn-primary" onclick="applyScanFilters()">Apply</button>
+                        <button class="btn btn-sm btn-outline" onclick="resetScanFilters()">Reset</button>
+                    </div>
+                </div>
+            </details>
+            <p id="scan-count" role="status" aria-live="polite" class="scan-count-label"></p>
+            <div id="scan-list"></div>
+            <div class="pagination" id="scan-pagination" aria-label="Scan list pagination"></div>`;
+        await _renderScans(siteId);
+    } catch (e) {
+        console.error(e);
+        document.getElementById('main-content').innerHTML = '<p style="color:var(--red)">Failed to load site.</p>';
+    }
+}
+
+function _updateFilterBadge() {
+    const badge = document.getElementById('filter-badge');
+    if (!badge) return;
+    const active = scanFilters.status || scanFilters.min_score !== '' || scanFilters.max_score !== '' ||
+        scanFilters.sort !== 'created_at' || scanFilters.order !== 'desc';
+    badge.hidden = !active;
+}
+
+async function applyScanFilters() {
+    scanPage = 0;
+    _updateFilterBadge();
+    await _renderScans(currentSiteId);
+}
+
+async function resetScanFilters() {
+    scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
+    scanPage = 0;
+    const g = (id) => document.getElementById(id);
+    if (g('filter-status')) g('filter-status').value = '';
+    if (g('filter-min-score')) g('filter-min-score').value = '';
+    if (g('filter-max-score')) g('filter-max-score').value = '';
+    if (g('filter-sort')) g('filter-sort').value = 'created_at';
+    if (g('filter-order')) g('filter-order').value = 'desc';
+    _updateFilterBadge();
+    await _renderScans(currentSiteId);
+}
+
+async function _renderScans(siteId) {
+    const listEl = document.getElementById('scan-list');
+    const countEl = document.getElementById('scan-count');
+    const pagEl = document.getElementById('scan-pagination');
+    if (!listEl) return;
+    listEl.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    const params = new URLSearchParams({ limit: SCAN_PAGE_SIZE, offset: scanPage * SCAN_PAGE_SIZE });
+    if (scanFilters.status) params.set('status', scanFilters.status);
+    if (scanFilters.min_score !== '') params.set('min_score', scanFilters.min_score);
+    if (scanFilters.max_score !== '') params.set('max_score', scanFilters.max_score);
+    if (scanFilters.sort) params.set('sort', scanFilters.sort);
+    if (scanFilters.order) params.set('order', scanFilters.order);
+    try {
+        const scans = await API.req('GET', `/sites/${siteId}/scans?${params}`);
+        if (!scans) return;
+        const hasMore = scans.length === SCAN_PAGE_SIZE;
+        const start = scanPage * SCAN_PAGE_SIZE + 1;
+        const isFiltered = scanFilters.status || scanFilters.min_score !== '' || scanFilters.max_score !== '';
+        if (countEl) {
+            countEl.textContent = scans.length
+                ? `Showing ${start}\u2013${start + scans.length - 1} scan${scans.length !== 1 ? 's' : ''}`
+                : scanPage > 0 ? 'No more scans.' : 'No scans match the current filters.';
+        }
+        listEl.innerHTML = scans.length
+            ? `<div class="sites-list">${scans.map(s => `
+                <div class="site-card" onclick="openScan(${s.id})">
+                    <div class="site-info">
+                        ${s.score !== null
+                            ? `<div class="score-ring ${scoreClass(s.score)}">${s.score.toFixed(0)}</div>`
+                            : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">${s.status === 'running' ? '...' : '--'}</div>`}
                         <div>
-                            <div class="name">Scan #${s.id} &mdash; ${s.status}</div>
-                            <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues &mdash; ${timeAgo(s.completed_at || s.created_at)}</div>
+                            <div class="name">Scan #${s.id} \u2014 ${esc(s.status)}</div>
+                            <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues \u2014 ${timeAgo(s.completed_at || s.created_at)}</div>
                         </div>
                     </div>
                     <div class="severity-bar">
@@ -680,8 +807,29 @@ async function openSite(siteId) {
                         ${s.moderate_count ? `<span class="badge badge-moderate">${s.moderate_count} Moderate</span>` : ''}
                         ${s.minor_count ? `<span class="badge badge-minor">${s.minor_count} Minor</span>` : ''}
                     </div>
-                </div>`).join('')}</div>`;
-    } catch (e) { console.error(e); }
+                </div>`).join('')}</div>`
+            : `<div class="empty-state">
+                <div class="icon">\uD83D\uDD0D</div>
+                <p>${isFiltered ? 'No scans match the current filters.' : 'No scans yet.'}</p>
+                ${!isFiltered ? `<button class="btn btn-green" style="margin-top:12px" onclick="startScan(${siteId})">Run First Scan</button>` : ''}
+               </div>`;
+        if (pagEl) {
+            pagEl.innerHTML = (scanPage > 0 || hasMore)
+                ? `<button class="btn btn-sm btn-outline" onclick="changeScanPage(-1)"${scanPage === 0 ? ' disabled' : ''} aria-label="Previous page">&#x2190; Previous</button>
+                   <span class="page-info">Page ${scanPage + 1}</span>
+                   <button class="btn btn-sm btn-outline" onclick="changeScanPage(1)"${!hasMore ? ' disabled' : ''} aria-label="Next page">Next &#x2192;</button>`
+                : '';
+        }
+    } catch (e) {
+        console.error(e);
+        listEl.innerHTML = '<p style="color:var(--red)">Failed to load scans.</p>';
+    }
+}
+
+async function changeScanPage(delta) {
+    scanPage = Math.max(0, scanPage + delta);
+    await _renderScans(currentSiteId);
+    document.getElementById('scan-list')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function openScan(scanId) {
