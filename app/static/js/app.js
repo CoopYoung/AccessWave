@@ -25,11 +25,61 @@ function timeAgo(d) {
     if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s/60) + 'm ago';
     if (s < 86400) return Math.floor(s/3600) + 'h ago'; return Math.floor(s/86400) + 'd ago';
 }
-function showToast(msg, type = 'success') {
-    let c = document.querySelector('.toast-container');
-    if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
-    const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
-    setTimeout(() => { t.style.animation = 'toast-in 0.3s ease reverse forwards'; setTimeout(() => t.remove(), 300); }, 3000);
+const _TOAST_ICONS = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+
+function showToast(msg, type = 'success', duration = 4000) {
+    let region = document.getElementById('toast-region');
+    if (!region) {
+        region = document.createElement('div');
+        region.id = 'toast-region';
+        region.className = 'toast-region';
+        region.setAttribute('role', 'log');
+        region.setAttribute('aria-label', 'Notifications');
+        region.setAttribute('aria-atomic', 'false');
+        document.body.appendChild(region);
+    }
+    // Errors interrupt screen readers immediately; all others politely queue
+    region.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+    // Evict oldest when over limit
+    while (region.children.length >= 5) _dismissToast(region.firstElementChild);
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML =
+        `<span class="toast-icon" aria-hidden="true">${_TOAST_ICONS[type] || _TOAST_ICONS.info}</span>` +
+        `<span class="toast-msg">${esc(msg)}</span>` +
+        `<button class="toast-close" type="button" aria-label="Dismiss notification">&#215;</button>` +
+        `<div class="toast-bar" aria-hidden="true"></div>`;
+    region.appendChild(toast);
+
+    const bar = toast.querySelector('.toast-bar');
+    if (duration > 0) {
+        bar.style.animation = `toast-shrink ${duration}ms linear forwards`;
+        toast._timer = setTimeout(() => _dismissToast(toast), duration);
+    }
+
+    toast.querySelector('.toast-close').addEventListener('click', () => _dismissToast(toast));
+
+    // Pause the countdown while the user hovers over the toast
+    toast.addEventListener('mouseenter', () => {
+        clearTimeout(toast._timer);
+        bar.style.animationPlayState = 'paused';
+    });
+    toast.addEventListener('mouseleave', () => {
+        if (!toast.classList.contains('toast-out')) {
+            bar.style.animationPlayState = 'running';
+            toast._timer = setTimeout(() => _dismissToast(toast), 1200);
+        }
+    });
+}
+
+function _dismissToast(toast) {
+    if (!toast || toast.classList.contains('toast-out')) return;
+    clearTimeout(toast._timer);
+    toast.classList.add('toast-out');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
 }
 
 // Auth
