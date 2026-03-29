@@ -24,6 +24,9 @@ class Site(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     url = Column(String(2048), nullable=False)
     name = Column(String(255), nullable=False)
+    # Scheduled scanning: none | daily | weekly | monthly
+    schedule = Column(String(20), default="none", nullable=False)
+    next_scan_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     owner = relationship("User", back_populates="sites")
     scans = relationship("Scan", back_populates="site", cascade="all, delete-orphan")
