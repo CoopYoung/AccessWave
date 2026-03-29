@@ -1,3 +1,28 @@
+// Mobile nav toggle — runs on every page
+document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.querySelector('.nav-toggle');
+    const links  = document.querySelector('nav .links');
+    if (!toggle || !links) return;
+    toggle.addEventListener('click', () => {
+        const open = links.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(open));
+    });
+    // Close when any nav link/button is tapped
+    links.addEventListener('click', (e) => {
+        if (e.target.closest('a, button')) {
+            links.classList.remove('open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+    // Close when user taps outside the nav
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('nav')) {
+            links.classList.remove('open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+});
+
 const API = {
     token: localStorage.getItem('aw_token'),
     async req(method, path, body) {
@@ -261,7 +286,7 @@ async function openScan(scanId) {
         el.innerHTML = `
             <a href="#" class="back-link" onclick="openSite(${scan.site_id});return false">&larr; Back to scans</a>
             <div class="scan-detail">
-                <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                     <h3>Scan #${scan.id}</h3>
                     ${scan.score !== null ? `<div class="score-ring ${scoreClass(scan.score)}" style="width:64px;height:64px;font-size:1.2rem">${scan.score.toFixed(0)}</div>` : ''}
                 </div>
@@ -282,7 +307,7 @@ async function openScan(scanId) {
                         <span style="color:var(--text-dim);font-size:0.82rem">${i.rule_id}</span>
                     </div>
                     <div class="issue-message">${esc(i.message)}</div>
-                    <div style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>
+                    <div class="issue-url" style="color:var(--text-muted);font-size:0.82rem">${esc(i.page_url)}</div>
                     ${i.element_html ? `<div class="issue-code">${esc(i.element_html)}</div>` : ''}
                     ${i.how_to_fix ? `<div class="issue-fix">${esc(i.how_to_fix)}</div>` : ''}
                 </div>`).join('')}</div>`;
