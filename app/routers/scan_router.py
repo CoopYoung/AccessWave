@@ -7,6 +7,11 @@ from typing import Literal
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl, field_validator
+import json
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from jose import JWTError, jwt
+from pydantic import BaseModel, HttpUrl
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +19,9 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
+from app.database import async_session, get_db
 from app.models import Issue, Scan, Site, User
+from app.services.scan_progress import get_progress
 from app.services.scan_runner import run_scan
 
 # Lazy import: only load Celery machinery when it is actually enabled so
@@ -370,6 +377,81 @@ async def dashboard_chart_data(user: User = Depends(get_current_user), db: Async
             "moderate": int(sev.moderate),
             "minor": int(sev.minor),
         },
+# --- SSE scan progress stream ---
+
+async def _get_user_from_query_token(
+    token: str | None = Query(None, alias="token"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Auth dependency that reads the JWT from ?token= for EventSource connections.
+
+    The browser's EventSource API cannot set custom headers, so we accept the
+    token as a query parameter for this endpoint only.
+    """
+    if token is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+@router.get("/scans/{scan_id}/stream")
+async def scan_progress_stream(
+    scan_id: int,
+    user: User = Depends(_get_user_from_query_token),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Stream live scan progress as Server-Sent Events.
+
+    The client connects once and receives ``data: <json>`` events roughly every
+    500 ms until the scan reaches ``completed`` or ``failed`` status.  The
+    connection is closed automatically by the server at that point.
+
+    Event payload fields:
+    - ``status``: "crawling" | "scanning" | "completed" | "failed"
+    - ``pages_done``: number of pages processed so far
+    - ``pages_total``: total pages to process (null while crawling)
+    - ``current_url``: URL currently being scanned (empty string otherwise)
+    """
+    # Authorise — raises 404 if scan does not belong to this user.
+    await _get_user_scan(scan_id, user.id, db)
+
+    # Maximum polling cycles before the stream self-terminates (~5 minutes).
+    MAX_CYCLES = 600
+
+    async def event_stream():
+        cycles = 0
+        try:
+            while cycles < MAX_CYCLES:
+                progress = get_progress(scan_id)
+                if progress:
+                    yield f"data: {json.dumps(progress)}\n\n"
+                    if progress["status"] in ("completed", "failed"):
+                        break
+                else:
+                    # Progress entry not yet written or already cleared — check DB.
+                    async with async_session() as check_db:
+                        result = await check_db.execute(select(Scan).where(Scan.id == scan_id))
+                        db_scan = result.scalar_one_or_none()
+                    if db_scan and db_scan.status in ("completed", "failed"):
+                        yield f"data: {json.dumps({'status': db_scan.status, 'pages_done': db_scan.pages_scanned, 'pages_total': db_scan.pages_scanned, 'current_url': ''})}\n\n"
+                        break
+                cycles += 1
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

@@ -867,6 +867,86 @@ async function startScan(siteId, btn) {
             if (bar) bar.style.width = '100%';
             if (track) track.setAttribute('aria-valuenow', '100');
             if (pctEl) pctEl.textContent = '100%';
+        const scan = await API.req('POST', `/sites/${siteId}/scan`);
+        if (!scan) return;
+        showToast('Scan started!');
+        trackScanProgress(siteId, scan.id);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+function trackScanProgress(siteId, scanId) {
+    const progressId = `scan-progress-${siteId}`;
+    let banner = document.getElementById(progressId);
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = progressId;
+        banner.className = 'scan-progress-banner';
+        banner.setAttribute('role', 'status');
+        banner.setAttribute('aria-live', 'polite');
+        banner.setAttribute('aria-label', 'Scan in progress');
+        const content = document.getElementById('main-content');
+        content.insertBefore(banner, content.firstChild);
+    }
+    banner.innerHTML = `
+        <div class="scan-progress-header">
+            <span class="scan-progress-text" id="scan-progress-text-${siteId}">Connecting…</span>
+        </div>
+        <div class="scan-progress-bar-track"
+             role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+             aria-labelledby="scan-progress-text-${siteId}">
+            <div class="scan-progress-bar-fill" id="scan-progress-fill-${siteId}" style="width:0%"></div>
+        </div>`;
+
+    const es = new EventSource(`/api/scans/${scanId}/stream?token=${API.token}`);
+
+    es.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const fill = document.getElementById(`scan-progress-fill-${siteId}`);
+        const text = document.getElementById(`scan-progress-text-${siteId}`);
+        const track = banner.querySelector('[role=progressbar]');
+        if (!fill || !text) return;
+
+        let pct = 0;
+        if (data.status === 'crawling') {
+            pct = 10;
+            text.textContent = 'Crawling pages…';
+        } else if (data.status === 'scanning') {
+            if (data.pages_total) {
+                pct = 10 + Math.round((data.pages_done / data.pages_total) * 85);
+                text.textContent = `Scanning page ${data.pages_done + 1} of ${data.pages_total}…`;
+            } else {
+                pct = 15;
+                text.textContent = 'Scanning…';
+            }
+        } else if (data.status === 'completed') {
+            pct = 100;
+            text.textContent = `Scan complete — ${data.pages_total || data.pages_done} page(s) scanned`;
+        } else if (data.status === 'failed') {
+            pct = 100;
+            text.textContent = 'Scan failed.';
+            if (fill) fill.style.background = 'var(--red)';
+        }
+
+        if (fill) fill.style.width = `${pct}%`;
+        if (track) track.setAttribute('aria-valuenow', pct);
+
+        if (data.status === 'completed' || data.status === 'failed') {
+            es.close();
+            setTimeout(async () => {
+                banner.remove();
+                await loadStats();
+                if (currentSiteId === siteId) await openSite(siteId);
+                else await loadSites();
+            }, 1500);
+        }
+    };
+
+    es.onerror = () => {
+        es.close();
+        const text = document.getElementById(`scan-progress-text-${siteId}`);
+        if (text) text.textContent = 'Lost connection — refreshing…';
+        setTimeout(async () => {
+            banner?.remove();
             await loadStats();
             await loadCharts();
             if (currentSiteId === siteId) await openSite(siteId);
@@ -879,6 +959,8 @@ async function startScan(siteId, btn) {
         if (btn) { btn.disabled = false; btn.textContent = 'Scan Now'; }
         showToast(e.message, 'error');
     }
+        }, 3000);
+    };
 }
 
 async function deleteSite(siteId) {
