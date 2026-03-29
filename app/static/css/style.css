@@ -39,15 +39,15 @@ nav .links a { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
 .hero-stat .num { font-size: 2.2rem; font-weight: 800; color: var(--primary); } .hero-stat .label { color: var(--text-muted); font-size: 0.85rem; }
 
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 60px 0; }
-.feature-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: box-shadow 0.2s; }
-.feature-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+.feature-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: box-shadow 0.25s ease, transform 0.25s ease; }
+.feature-card:hover { box-shadow: 0 8px 32px rgba(79,70,229,0.1); }
 .feature-icon { font-size: 1.8rem; margin-bottom: 12px; } .feature-card h3 { margin-bottom: 6px; } .feature-card p { color: var(--text-muted); font-size: 0.9rem; }
 
 .pricing { padding: 80px 0; text-align: center; }
 .pricing h2 { font-size: 2rem; margin-bottom: 8px; } .pricing > .container > p { color: var(--text-muted); margin-bottom: 48px; }
 .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.price-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 32px; text-align: left; position: relative; transition: box-shadow 0.2s; }
-.price-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+.price-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 32px; text-align: left; position: relative; transition: box-shadow 0.25s ease, transform 0.25s ease; }
+.price-card:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
 .price-card.popular { border-color: var(--primary); border-width: 2px; }
 .price-card.popular::before { content: 'Most Popular'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; padding: 4px 16px; border-radius: 100px; font-size: 0.75rem; font-weight: 700; }
 .price-amount { font-size: 2.5rem; font-weight: 800; margin: 12px 0; } .price-amount span { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); }
@@ -79,8 +79,8 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .score-bad { background: var(--red-light); color: var(--red); border: 3px solid var(--red); }
 
 .sites-list { display: flex; flex-direction: column; gap: 12px; }
-.site-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; justify-content: space-between; align-items: center; transition: box-shadow 0.2s; cursor: pointer; }
-.site-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.site-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; justify-content: space-between; align-items: center; transition: box-shadow 0.2s ease, transform 0.2s ease; cursor: pointer; }
+.site-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
 .site-info { display: flex; align-items: center; gap: 16px; flex: 1; }
 .site-info .name { font-weight: 700; font-size: 1rem; } .site-info .url { color: var(--text-muted); font-size: 0.85rem; }
 .site-meta { display: flex; gap: 12px; align-items: center; }
@@ -154,4 +154,98 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
     .charts-grid { grid-template-columns: 1fr; }
+}
+
+/* =====================================================
+   Animations & Transitions (Track B #8)
+   All motion animations are gated on prefers-reduced-motion.
+   Hover/focus transitions are kept subtle and safe for all.
+   ===================================================== */
+
+/* --- Hover micro-interactions (safe for all users) --- */
+
+/* Nav link underline slide */
+nav .links a:not(.btn) { position: relative; }
+nav .links a:not(.btn)::after {
+    content: '';
+    position: absolute;
+    bottom: -2px; left: 0;
+    width: 0; height: 2px;
+    background: var(--primary);
+    transition: width 0.2s ease;
+    border-radius: 2px;
+}
+nav .links a:not(.btn):hover::after,
+nav .links a:not(.btn):focus-visible::after { width: 100%; }
+
+/* Button press */
+.btn:active { transform: scale(0.97); }
+
+/* Score ring hover scale */
+.score-ring { transition: transform 0.2s ease; }
+.score-ring:hover { transform: scale(1.1); }
+
+/* Issue card border highlight */
+.issue-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.issue-card:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(79,70,229,0.08); }
+
+/* Back link arrow nudge */
+.back-link { transition: color 0.15s ease, gap 0.15s ease; }
+.back-link:hover { gap: 8px; }
+
+/* Stat card value colour transition (used by counter animation) */
+.stat-card .value { transition: color 0.3s ease; }
+
+/* --- Scroll-reveal utility class ---
+   Default: fully visible (for reduced-motion or JS-disabled users).
+   JS adds .visible; CSS below (inside no-preference query) supplies the transition. */
+.reveal { opacity: 1; transform: none; }
+
+/* --- Motion animations — only for users who accept motion --- */
+@media (prefers-reduced-motion: no-preference) {
+    /* Keyframes */
+    @keyframes aw-fade-in   { from { opacity: 0; }                              to { opacity: 1; } }
+    @keyframes aw-slide-up  { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes aw-scale-in  { from { opacity: 0; transform: scale(0.94); }      to { opacity: 1; transform: scale(1); } }
+    @keyframes aw-count-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+
+    /* Page fade-in */
+    body { animation: aw-fade-in 0.2s ease both; }
+
+    /* Hero entrance — staggered slide-up */
+    .hero h1   { animation: aw-slide-up 0.5s ease both; }
+    .hero p    { animation: aw-slide-up 0.5s 0.1s  ease both; }
+    .hero .cta { animation: aw-slide-up 0.5s 0.2s  ease both; }
+    .hero-stats { animation: aw-slide-up 0.5s 0.32s ease both; }
+
+    /* Auth card entrance */
+    .auth-card { animation: aw-slide-up 0.4s ease both; }
+
+    /* Card lift on hover */
+    .feature-card:hover { transform: translateY(-4px); }
+    .price-card:hover   { transform: translateY(-5px); }
+    .site-card:hover    { transform: translateY(-2px); }
+
+    /* Modal open animation */
+    .modal-overlay.active .modal { animation: aw-scale-in 0.2s ease both; }
+
+    /* Scroll-reveal: hidden by default, transitions to visible */
+    .reveal {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.45s ease, transform 0.45s ease;
+    }
+    .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    /* Stagger siblings in a grid/list */
+    .reveal:nth-child(2) { transition-delay: 0.07s; }
+    .reveal:nth-child(3) { transition-delay: 0.14s; }
+    .reveal:nth-child(4) { transition-delay: 0.21s; }
+    .reveal:nth-child(5) { transition-delay: 0.28s; }
+    .reveal:nth-child(6) { transition-delay: 0.35s; }
+
+    /* Stat counter pop */
+    .stat-card .value.counting { animation: aw-count-pop 0.35s ease; }
 }

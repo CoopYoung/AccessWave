@@ -82,6 +82,58 @@ function _dismissToast(toast) {
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
 }
 
+// ── Animations & Transitions (Track B #8) ──────────────────────────────────
+
+/**
+ * Animate a stat counter from 0 to `target`.
+ * Respects prefers-reduced-motion — skips animation when user prefers less motion.
+ * @param {HTMLElement} el      - Target element whose textContent will be updated
+ * @param {number|null} target  - Final numeric value (null → shows '--')
+ * @param {number} duration     - Animation duration in ms (default 600)
+ */
+function animateCounter(el, target, duration = 600) {
+    if (target === null || target === undefined) { el.textContent = '--'; return; }
+    const num = +target;
+    if (isNaN(num)) { el.textContent = target; return; }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        el.textContent = target;
+        return;
+    }
+    el.classList.add('counting');
+    const start = performance.now();
+    const tick = (now) => {
+        const p = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+        el.textContent = Math.round(num * eased);
+        if (p < 1) { requestAnimationFrame(tick); }
+        else { el.textContent = target; el.classList.remove('counting'); }
+    };
+    requestAnimationFrame(tick);
+}
+
+/**
+ * Observe `.reveal` elements and add `.visible` when they enter the viewport.
+ * Safe to call multiple times; won't re-observe already-visible elements.
+ */
+function initReveal() {
+    const els = document.querySelectorAll('.reveal:not(.visible)');
+    if (!els.length) return;
+    if (!('IntersectionObserver' in window)) {
+        // Fallback: make everything visible immediately
+        els.forEach(el => el.classList.add('visible'));
+        return;
+    }
+    const obs = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+        });
+    }, { threshold: 0.1, rootMargin: '0px 0px -32px 0px' });
+    els.forEach(el => obs.observe(el));
+}
+
+// Auto-init reveal on every page load
+document.addEventListener('DOMContentLoaded', initReveal);
+
 // Auth
 function initAuth(type) {
     if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
@@ -125,11 +177,11 @@ async function loadStats() {
     try {
         const s = await API.req('GET', '/dashboard/stats');
         if (!s) return;
-        document.getElementById('stat-sites').textContent = s.total_sites;
-        document.getElementById('stat-scans').textContent = s.total_scans;
+        animateCounter(document.getElementById('stat-sites'), s.total_sites);
+        animateCounter(document.getElementById('stat-scans'), s.total_scans);
         document.getElementById('stat-score').textContent = s.avg_score !== null ? s.avg_score : '--';
-        document.getElementById('stat-issues').textContent = s.total_issues;
-        document.getElementById('stat-critical').textContent = s.critical_issues;
+        animateCounter(document.getElementById('stat-issues'), s.total_issues);
+        animateCounter(document.getElementById('stat-critical'), s.critical_issues);
     } catch (e) { console.error(e); }
 }
 
