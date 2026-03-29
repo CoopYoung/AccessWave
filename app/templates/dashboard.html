@@ -60,6 +60,25 @@
         </form>
     </div></div>
 
+    <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+        <div class="modal">
+            <h3 id="edit-modal-title">Edit Site</h3>
+            <form id="edit-site-form">
+                <input type="hidden" name="site_id">
+                <div class="form-group">
+                    <label for="edit-site-name">Site Name</label>
+                    <input type="text" id="edit-site-name" name="name" required placeholder="My Website">
+                </div>
+                <div class="form-group">
+                    <label for="edit-site-url">URL</label>
+                    <input type="url" id="edit-site-url" name="url" required placeholder="https://example.com">
+                </div>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-outline" id="close-edit-modal" style="margin-left:8px">Cancel</button>
+            </form>
+        </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
     <script>initDashboard();</script>
 </body>

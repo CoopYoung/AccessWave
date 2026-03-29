@@ -169,6 +169,11 @@ async function initDashboard() {
     document.getElementById('add-site-btn')?.addEventListener('click', () => document.getElementById('add-modal').classList.add('active'));
     document.getElementById('close-modal')?.addEventListener('click', () => document.getElementById('add-modal').classList.remove('active'));
     document.getElementById('site-form')?.addEventListener('submit', addSite);
+    document.getElementById('close-edit-modal')?.addEventListener('click', () => document.getElementById('edit-modal').classList.remove('active'));
+    document.getElementById('edit-site-form')?.addEventListener('submit', saveEditSite);
+    // Close modals when clicking the backdrop
+    document.getElementById('add-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
+    document.getElementById('edit-modal')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('active'); });
     await loadStats();
     await Promise.all([loadSites(), loadCharts()]);
 }
@@ -202,6 +207,7 @@ async function loadSites() {
                 <div class="site-meta">
                     <span class="last-scan">${s.last_scan_at ? 'Scanned ' + timeAgo(s.last_scan_at) : 'Not scanned'}</span>
                     <button class="btn btn-sm btn-green" onclick="event.stopPropagation();startScan(${s.id})">Scan Now</button>
+                    <button class="btn btn-sm btn-edit" aria-label="Edit ${esc(s.name)}" onclick="event.stopPropagation();openEditSite(${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.url).replace(/'/g,"\\'")}')">Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSite(${s.id})">Delete</button>
                 </div>
             </div>`).join('')}</div>`;
@@ -316,6 +322,33 @@ async function deleteSite(siteId) {
         showToast('Site deleted');
         await Promise.all([loadStats(), loadSites()]);
     } catch (e) { showToast(e.message, 'error'); }
+}
+
+function openEditSite(siteId, name, url) {
+    const form = document.getElementById('edit-site-form');
+    form.site_id.value = siteId;
+    form.name.value = name;
+    form.url.value = url;
+    document.getElementById('edit-modal').classList.add('active');
+    document.getElementById('edit-site-name').focus();
+}
+
+async function saveEditSite(e) {
+    e.preventDefault();
+    const form = e.target;
+    const siteId = form.site_id.value;
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+        await API.req('PATCH', `/sites/${siteId}`, { name: form.name.value, url: form.url.value });
+        document.getElementById('edit-modal').classList.remove('active');
+        showToast('Site updated');
+        await Promise.all([loadStats(), loadSites()]);
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
 }
 
 async function upgradePlan(plan) {

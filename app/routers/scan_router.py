@@ -77,6 +77,11 @@ class SiteCreate(BaseModel):
         return v
 
 
+class SiteUpdate(BaseModel):
+    name: str | None = None
+    url: HttpUrl | None = None
+
+
 class SiteOut(BaseModel):
     id: int
     name: str
@@ -177,6 +182,23 @@ async def create_site(request: Request, body: SiteCreate, user: User = Depends(g
         raise HTTPException(status_code=403, detail=f"Site limit ({plan['sites']}) reached. Upgrade your plan.")
     site = Site(user_id=user.id, name=body.name, url=str(body.url))
     db.add(site)
+    await db.commit()
+    await db.refresh(site)
+    return SiteOut(id=site.id, name=site.name, url=site.url, created_at=site.created_at)
+
+
+@router.patch("/sites/{site_id}", response_model=SiteOut)
+async def update_site(
+    site_id: int,
+    body: SiteUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    site = await _get_user_site(site_id, user.id, db)
+    if body.name is not None:
+        site.name = body.name
+    if body.url is not None:
+        site.url = str(body.url)
     await db.commit()
     await db.refresh(site)
     return SiteOut(id=site.id, name=site.name, url=site.url, created_at=site.created_at)
