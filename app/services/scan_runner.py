@@ -22,6 +22,7 @@ from app.models import Issue, Scan, Site
 from app.services.crawler import crawl_site
 from app.services.scan_progress import clear_progress, update_progress
 from app.services.scanner import IssueFound, calculate_score, scan_html
+from app.services.webhook_service import fire_scan_webhooks
 
 logger = structlog.get_logger("accesswave.runner")
 
@@ -133,6 +134,10 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
             update_progress(scan.id, pages_done=0, pages_total=0, status="failed")
 
         await db.commit()
+
+        # Notify any registered webhooks (non-blocking; errors are logged, not raised).
+        asyncio.create_task(fire_scan_webhooks(scan.id))
+
         # Keep the final progress entry briefly so SSE clients can receive it,
         # then remove it to prevent stale accumulation.
         await asyncio.sleep(10)

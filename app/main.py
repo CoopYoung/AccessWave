@@ -23,6 +23,7 @@ from app.logging_config import configure_logging
 from app.routers import auth_router, billing_router, scan_router
 from app.security_headers import SecurityHeadersMiddleware
 from app.routers import api_keys_router
+from app.routers import webhooks_router
 from app.scheduler import start_scheduler, stop_scheduler
 
 configure_logging(log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
@@ -78,6 +79,7 @@ app.include_router(auth_router.router)
 app.include_router(scan_router.router)
 app.include_router(billing_router.router)
 app.include_router(api_keys_router.router)
+app.include_router(webhooks_router.router)
 
 # Instrument all HTTP endpoints and expose /metrics in Prometheus text format.
 # The instrumentator collects: request count, request duration, response size,
@@ -131,6 +133,10 @@ async def settings_page(request: Request):
 @app.get("/api-keys", response_class=HTMLResponse)
 async def api_keys_page(request: Request):
     return templates.TemplateResponse("api_keys.html", {"request": request})
+
+@app.get("/webhooks", response_class=HTMLResponse)
+async def webhooks_page(request: Request):
+    return templates.TemplateResponse("webhooks.html", {"request": request})
 @app.get("/share/{token}", response_class=HTMLResponse)
 async def shared_report_page(request: Request, token: str):
     return templates.TemplateResponse("shared_report.html", {"request": request, "token": token})
