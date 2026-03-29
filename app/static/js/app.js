@@ -1420,4 +1420,115 @@ function _renderSeverityChart(totals) {
             },
         },
     });
+// Settings page
+async function initSettings() {
+    if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
+    document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
+    document.getElementById('open-delete-modal')?.addEventListener('click', openDeleteModal);
+    document.getElementById('close-delete-modal')?.addEventListener('click', closeDeleteModal);
+    document.getElementById('delete-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('delete-modal')) closeDeleteModal();
+    });
+    document.getElementById('profile-form')?.addEventListener('submit', saveProfile);
+    document.getElementById('password-form')?.addEventListener('submit', changePassword);
+    document.getElementById('delete-form')?.addEventListener('submit', deleteAccount);
+    await loadProfile();
+}
+
+async function loadProfile() {
+    try {
+        const user = await API.req('GET', '/auth/me');
+        if (!user) return;
+        const emailInput = document.getElementById('profile-email');
+        if (emailInput) emailInput.value = user.email;
+        const planBadge = document.getElementById('profile-plan');
+        if (planBadge) planBadge.textContent = user.plan;
+        const since = document.getElementById('profile-since');
+        if (since) {
+            const d = new Date(user.created_at);
+            since.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function saveProfile(e) {
+    e.preventDefault();
+    const banner = document.getElementById('profile-banner');
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    hideBanner(banner);
+    try {
+        const email = document.getElementById('profile-email').value.trim();
+        await API.req('PUT', '/auth/profile', { email });
+        showBanner(banner, 'Email updated successfully.', 'success');
+        showToast('Profile saved');
+    } catch (err) {
+        showBanner(banner, err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function changePassword(e) {
+    e.preventDefault();
+    const banner = document.getElementById('password-banner');
+    const btn = e.target.querySelector('button[type=submit]');
+    const newPw = document.getElementById('new-password').value;
+    const confirmPw = document.getElementById('confirm-password').value;
+    hideBanner(banner);
+    if (newPw !== confirmPw) { showBanner(banner, 'New passwords do not match.', 'error'); return; }
+    btn.disabled = true;
+    try {
+        await API.req('PUT', '/auth/password', {
+            current_password: document.getElementById('current-password').value,
+            new_password: newPw,
+        });
+        e.target.reset();
+        showBanner(banner, 'Password changed successfully.', 'success');
+        showToast('Password updated');
+    } catch (err) {
+        showBanner(banner, err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function openDeleteModal() {
+    const modal = document.getElementById('delete-modal');
+    modal.classList.add('active');
+    document.getElementById('delete-password')?.focus();
+}
+
+function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.remove('active');
+    document.getElementById('delete-form')?.reset();
+    hideBanner(document.getElementById('delete-banner'));
+}
+
+async function deleteAccount(e) {
+    e.preventDefault();
+    const banner = document.getElementById('delete-banner');
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    hideBanner(banner);
+    try {
+        await API.req('DELETE', '/auth/account', { password: document.getElementById('delete-password').value });
+        API.logout();
+    } catch (err) {
+        showBanner(banner, err.message, 'error');
+        btn.disabled = false;
+    }
+}
+
+function showBanner(el, msg, type) {
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `settings-banner ${type}`;
+    el.hidden = false;
+}
+
+function hideBanner(el) {
+    if (!el) return;
+    el.hidden = true;
+    el.textContent = '';
 }

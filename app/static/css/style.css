@@ -620,6 +620,23 @@ kbd {
     padding: 2px 8px; font-family: inherit; font-size: 0.78rem; font-weight: 600;
     color: var(--text); white-space: nowrap;
 }
+/* Settings page */
+.settings-page { padding: 32px 0 64px; max-width: 640px; }
+.settings-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 28px; }
+.settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 20px; }
+.settings-card-title { font-size: 1rem; font-weight: 700; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.settings-plan-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 0.9rem; }
+.settings-label { color: var(--text-muted); min-width: 110px; }
+.settings-value-text { color: var(--text); font-weight: 500; }
+.settings-upgrade-link { font-size: 0.82rem; color: var(--primary); font-weight: 600; }
+.badge-plan { background: var(--primary-light); color: var(--primary); text-transform: capitalize; }
+.field-hint { display: block; font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+.settings-banner { padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; margin-bottom: 16px; }
+.settings-banner.success { background: var(--green-light); color: var(--green); }
+.settings-banner.error { background: var(--red-light); color: var(--red); }
+.settings-danger-zone { border-color: #fca5a5; }
+.settings-danger-title { color: var(--red); }
+.settings-danger-desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
@@ -631,4 +648,5 @@ kbd {
     .filter-actions { width: 100%; }
     .filter-actions .btn { flex: 1; }
     .site-header h2 { font-size: 1.15rem; }
+    .settings-page { padding: 24px 0 48px; }
 }

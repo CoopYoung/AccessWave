@@ -117,3 +117,8 @@ async def login_page(request: Request):
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request})
