@@ -480,8 +480,34 @@ nav .links a:not(.btn):focus-visible::after { width: 100%; }
 .form-group input.input-invalid { border-color: var(--red); }
 .form-group input.input-invalid:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-light); }
 .form-group input.input-valid { border-color: var(--green); }
+/* Score Gauge ----------------------------------------------------------- */
+.score-gauge { display: block; overflow: visible; flex-shrink: 0; }
+.gauge-track { stroke: var(--border); }
+.gauge-fill {
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gauge-good { stroke: var(--green); }
+.gauge-ok   { stroke: var(--amber); }
+.gauge-bad  { stroke: var(--red);   }
+.gauge-score {
+    fill: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    font-weight: 800;
+}
+.gauge-label {
+    fill: var(--text-muted);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+}
+@media (prefers-reduced-motion: reduce) { .gauge-fill { transition: none; } }
+
+/* Scan summary layout (gauge + text side-by-side) ----------------------- */
+.scan-summary { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.scan-summary-info { flex: 1; min-width: 0; }
 
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.2rem; } .features, .pricing-grid { grid-template-columns: 1fr; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); } .hero-stats { flex-direction: column; gap: 16px; }
+    /* Stack gauge above text on narrow screens */
+    .scan-summary { flex-direction: column-reverse; align-items: center; }
 }
