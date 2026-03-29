@@ -22,6 +22,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+// Dark mode
+function initDarkMode() {
+    const html = document.documentElement;
+    const btn = document.getElementById('dark-toggle');
+    const stored = localStorage.getItem('aw_theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = stored ? stored === 'dark' : prefersDark;
+
+    function applyTheme(dark) {
+        if (dark) {
+            html.setAttribute('data-theme', 'dark');
+        } else {
+            html.removeAttribute('data-theme');
+        }
+        if (btn) {
+            btn.textContent = dark ? '☀' : '🌙';
+            btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.setAttribute('aria-pressed', String(dark));
+        }
+    }
+
+    applyTheme(isDark);
+
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const nowDark = html.getAttribute('data-theme') === 'dark';
+            localStorage.setItem('aw_theme', nowDark ? 'light' : 'dark');
+            applyTheme(!nowDark);
+        });
+    }
+
+    // Keep in sync if another tab changes the preference
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('aw_theme')) applyTheme(e.matches);
+    });
+}
 
 const API = {
     token: localStorage.getItem('aw_token'),
@@ -583,7 +619,7 @@ async function openScan(scanId) {
                 <p style="color:var(--text-muted);margin:8px 0">${scan.pages_scanned} pages scanned &mdash; ${scan.total_issues} issues found</p>
                 <div class="severity-bar">
                     <span class="severity-count" style="background:var(--red-light);color:var(--red)">${scan.critical_count} Critical</span>
-                    <span class="severity-count" style="background:#fff7ed;color:#c2410c">${scan.serious_count} Serious</span>
+                    <span class="severity-count" style="background:var(--serious-light);color:var(--serious)">${scan.serious_count} Serious</span>
                     <span class="severity-count" style="background:var(--amber-light);color:var(--amber)">${scan.moderate_count} Moderate</span>
                     <span class="severity-count" style="background:var(--blue-light);color:var(--blue)">${scan.minor_count} Minor</span>
                 <div class="scan-summary">

@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" crossorigin="anonymous">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
     <nav><div class="container">
@@ -17,6 +18,7 @@
         <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
             <a href="#" onclick="upgradePlan('pro')">Upgrade</a>
             <a href="#" id="logout-btn">Log out</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
         </div>
     </div></nav>
 
@@ -91,6 +93,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="/static/js/app.js"></script>
-    <script>initDashboard();</script>
+    <script>initDarkMode(); initDashboard();</script>
 </body>
 </html>

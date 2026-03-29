@@ -6,6 +6,7 @@
     <title>AccessWave - WCAG Accessibility Scanner</title>
     <meta name="description" content="Scan your website for ADA/WCAG accessibility issues. Get actionable fixes, compliance scores, and audit reports.">
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
     <nav><div class="container">
@@ -18,6 +19,7 @@
             <a href="#pricing">Pricing</a>
             <a href="/login">Log in</a>
             <a href="/register" class="btn btn-primary btn-sm">Start Free</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
         </div>
     </div></nav>
 
@@ -68,5 +70,6 @@
 
     <footer><div class="container"><p>AccessWave &mdash; Making the web accessible, one scan at a time.</p></div></footer>
     <script src="/static/js/app.js"></script>
+    <script>initDarkMode();</script>
 </body>
 </html>
