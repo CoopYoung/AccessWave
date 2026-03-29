@@ -498,6 +498,10 @@ let scanPage = 0;
 const SCAN_PAGE_SIZE = 10;
 let selectedSites = new Set();
 
+// Scan comparison state
+let compareMode = false;
+let compareSelected = []; // up to 2 scan ids
+
 async function initDashboard() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
 
@@ -790,6 +794,8 @@ async function openSite(siteId) {
     currentSiteId = siteId;
     scanPage = 0;
     scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
+    compareMode = false;
+    compareSelected = [];
     const el = document.getElementById('main-content');
     el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
         <div class="sites-list" aria-busy="true" aria-label="Loading scans">${skSiteCards(3)}</div>`;
@@ -806,6 +812,10 @@ async function openSite(siteId) {
                 <button class="btn btn-green" onclick="startScan(${siteId},this)">Run First Scan</button></div>`;
             return;
         }
+        const completedScans = scans.filter(s => s.status === 'completed');
+        const compareBtn = completedScans.length >= 2
+            ? `<button class="btn btn-outline btn-sm" id="compare-toggle-btn" onclick="toggleCompareMode()" aria-pressed="false">Compare Scans</button>`
+            : '';
         el.innerHTML = `<a href="#" class="back-link" onclick="loadSites();return false">&larr; Back to sites</a>
             <h2 style="margin-bottom:16px">${esc(site?.name || '')}</h2>
             <div class="sites-list">${scans.map(s => `
@@ -966,6 +976,188 @@ async function changeScanPage(delta) {
     scanPage = Math.max(0, scanPage + delta);
     await _renderScans(currentSiteId);
     document.getElementById('scan-list')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h2>${esc(site?.name || '')}</h2>
+                ${compareBtn}
+            </div>
+            <div id="compare-toolbar" style="display:none" role="status" aria-live="polite"></div>
+            <div class="sites-list" id="scans-list">${renderScanCards(scans)}</div>`;
+    } catch (e) { console.error(e); }
+}
+
+function renderScanCards(scans) {
+    return scans.map(s => {
+        const scoreEl = s.score !== null
+            ? `<div class="score-ring ${scoreClass(s.score)}">${s.score.toFixed(0)}</div>`
+            : `<div class="score-ring" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">${s.status === 'running' ? '...' : '--'}</div>`;
+        const badges = [
+            s.critical_count ? `<span class="badge badge-critical">${s.critical_count} Critical</span>` : '',
+            s.serious_count  ? `<span class="badge badge-serious">${s.serious_count} Serious</span>`   : '',
+            s.moderate_count ? `<span class="badge badge-moderate">${s.moderate_count} Moderate</span>` : '',
+            s.minor_count    ? `<span class="badge badge-minor">${s.minor_count} Minor</span>`          : '',
+        ].join('');
+        const isCompleted = s.status === 'completed';
+        return `<div class="site-card${compareMode && isCompleted ? ' scan-card-compare' : ''}" id="scan-card-${s.id}"
+                     onclick="${compareMode && isCompleted ? `toggleCompareSelect(${s.id})` : `openScan(${s.id})`}"
+                     role="${compareMode && isCompleted ? 'checkbox' : 'button'}"
+                     aria-checked="${compareMode && isCompleted ? 'false' : undefined}"
+                     tabindex="0"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault()}">
+            <div class="site-info">
+                ${scoreEl}
+                <div>
+                    <div class="name">Scan #${s.id} &mdash; ${s.status}</div>
+                    <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues &mdash; ${timeAgo(s.completed_at || s.created_at)}</div>
+                </div>
+            </div>
+            <div class="severity-bar">${badges}</div>
+        </div>`;
+    }).join('');
+}
+
+function toggleCompareMode() {
+    compareMode = !compareMode;
+    compareSelected = [];
+    const btn = document.getElementById('compare-toggle-btn');
+    if (btn) {
+        btn.textContent = compareMode ? 'Cancel' : 'Compare Scans';
+        btn.setAttribute('aria-pressed', compareMode ? 'true' : 'false');
+        btn.classList.toggle('btn-danger', compareMode);
+        btn.classList.toggle('btn-outline', !compareMode);
+    }
+    updateCompareToolbar();
+    // Re-render cards to add/remove checkboxes
+    const listEl = document.getElementById('scans-list');
+    if (!listEl) return;
+    // Re-fetch scans from existing rendered data via DOM isn't reliable; re-open
+    openSite(currentSiteId);
+}
+
+function toggleCompareSelect(scanId) {
+    const card = document.getElementById(`scan-card-${scanId}`);
+    const idx = compareSelected.indexOf(scanId);
+    if (idx > -1) {
+        compareSelected.splice(idx, 1);
+        card?.classList.remove('selected');
+        card?.setAttribute('aria-checked', 'false');
+    } else {
+        if (compareSelected.length >= 2) {
+            showToast('Select exactly 2 scans to compare.', 'info');
+            return;
+        }
+        compareSelected.push(scanId);
+        card?.classList.add('selected');
+        card?.setAttribute('aria-checked', 'true');
+    }
+    updateCompareToolbar();
+}
+
+function updateCompareToolbar() {
+    const toolbar = document.getElementById('compare-toolbar');
+    if (!toolbar) return;
+    if (!compareMode) { toolbar.style.display = 'none'; return; }
+    toolbar.style.display = 'block';
+    const count = compareSelected.length;
+    const readyBtn = count === 2
+        ? `<button class="btn btn-primary btn-sm" onclick="runComparison()">Compare Selected</button>`
+        : `<button class="btn btn-primary btn-sm" disabled aria-disabled="true">Compare Selected</button>`;
+    toolbar.innerHTML = `<div class="compare-toolbar">
+        <p>${count === 0 ? 'Select 2 scans to compare' : count === 1 ? '1 scan selected — select one more' : '2 scans selected'}</p>
+        ${readyBtn}
+    </div>`;
+}
+
+async function runComparison() {
+    if (compareSelected.length !== 2) return;
+    const [a, b] = compareSelected;
+    try {
+        const result = await API.req('GET', `/scans/compare?scan_a=${a}&scan_b=${b}`);
+        showComparisonModal(result);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+function deltaDisplay(value, invertedPolarity = false) {
+    // invertedPolarity = true means lower is better (issues, critical counts)
+    if (value === 0) return { text: '±0', cls: 'delta-neutral' };
+    const better = invertedPolarity ? value < 0 : value > 0;
+    const sign = value > 0 ? '+' : '';
+    return { text: `${sign}${value}`, cls: better ? 'delta-better' : 'delta-worse' };
+}
+
+function showComparisonModal(r) {
+    const existing = document.getElementById('compare-modal');
+    if (existing) existing.remove();
+
+    const scoreA = r.scan_a.score !== null ? r.scan_a.score.toFixed(1) : '--';
+    const scoreB = r.scan_b.score !== null ? r.scan_b.score.toFixed(1) : '--';
+    const scoreDeltaHtml = r.score_delta !== null
+        ? (() => { const d = deltaDisplay(r.score_delta, false); return `<div class="delta-cell"><div class="delta-label">Score</div><div class="delta-value ${d.cls}">${d.text}</div></div>`; })()
+        : '';
+
+    const deltas = [
+        { label: 'Issues',    value: r.issues_delta,   inv: true },
+        { label: 'Critical',  value: r.critical_delta,  inv: true },
+        { label: 'Serious',   value: r.serious_delta,   inv: true },
+        { label: 'Moderate',  value: r.moderate_delta,  inv: true },
+        { label: 'Minor',     value: r.minor_delta,     inv: true },
+    ];
+    const deltaGrid = `<div class="compare-delta-grid">
+        ${scoreDeltaHtml}
+        ${deltas.map(d => { const dd = deltaDisplay(d.value, d.inv); return `<div class="delta-cell"><div class="delta-label">${d.label}</div><div class="delta-value ${dd.cls}">${dd.text}</div></div>`; }).join('')}
+    </div>`;
+
+    const fixedHtml = r.fixed_rules.length
+        ? `<ul>${r.fixed_rules.map(rule => `<li class="rule-fixed" role="listitem">&#10003; ${esc(rule)}</li>`).join('')}</ul>`
+        : `<p class="compare-rules-empty">No rules fixed between these scans.</p>`;
+    const newHtml = r.new_rules.length
+        ? `<ul>${r.new_rules.map(rule => `<li class="rule-new" role="listitem">&#43; ${esc(rule)}</li>`).join('')}</ul>`
+        : `<p class="compare-rules-empty">No new rules introduced between these scans.</p>`;
+
+    const modal = document.createElement('div');
+    modal.id = 'compare-modal';
+    modal.className = 'modal-overlay active';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', `Comparison of Scan #${r.scan_a.id} and Scan #${r.scan_b.id}`);
+    modal.innerHTML = `<div class="modal compare-modal">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 style="margin:0">Scan Comparison</h3>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('compare-modal').remove()" aria-label="Close comparison">&#10005;</button>
+        </div>
+        <div class="compare-header" aria-label="Score comparison">
+            <div class="compare-scan-box">
+                <div class="label">Scan #${r.scan_a.id} (Baseline)</div>
+                <div class="score-large ${r.scan_a.score !== null ? scoreClass(r.scan_a.score) : ''}" style="color:inherit">${scoreA}</div>
+                <div class="scan-meta">${r.scan_a.pages_scanned} pages &middot; ${r.scan_a.total_issues} issues</div>
+            </div>
+            <div class="compare-arrow" aria-hidden="true">&rarr;</div>
+            <div class="compare-scan-box">
+                <div class="label">Scan #${r.scan_b.id} (Compared)</div>
+                <div class="score-large ${r.scan_b.score !== null ? scoreClass(r.scan_b.score) : ''}" style="color:inherit">${scoreB}</div>
+                <div class="scan-meta">${r.scan_b.pages_scanned} pages &middot; ${r.scan_b.total_issues} issues</div>
+            </div>
+        </div>
+        <h4 style="margin-bottom:10px;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Changes</h4>
+        ${deltaGrid}
+        <div class="compare-rules">
+            <div class="compare-rules-section">
+                <h4 style="color:var(--green)">&#10003; Rules Fixed (${r.fixed_rules.length})</h4>
+                ${fixedHtml}
+            </div>
+            <div class="compare-rules-section">
+                <h4 style="color:var(--red)">&#43; New Rules Introduced (${r.new_rules.length})</h4>
+                ${newHtml}
+            </div>
+        </div>
+    </div>`;
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    // Close on Escape
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.remove(); });
+    document.body.appendChild(modal);
+    // Focus the close button for accessibility
+    modal.querySelector('button[aria-label="Close comparison"]')?.focus();
 }
 
 async function openScan(scanId) {

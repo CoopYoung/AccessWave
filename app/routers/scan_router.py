@@ -294,6 +294,57 @@ async def list_scans(
     return result.scalars().all()
 
 
+class ScanCompareOut(BaseModel):
+    scan_a: ScanOut
+    scan_b: ScanOut
+    score_delta: float | None
+    issues_delta: int
+    critical_delta: int
+    serious_delta: int
+    moderate_delta: int
+    minor_delta: int
+    new_rules: list[str]   # rules present in scan_b but not scan_a
+    fixed_rules: list[str] # rules present in scan_a but not scan_b
+
+
+# NOTE: this route must appear before /scans/{scan_id} so "compare" is not
+# mistaken for an integer path parameter.
+@router.get("/scans/compare", response_model=ScanCompareOut)
+async def compare_scans(
+    scan_a: int = Query(..., description="ID of the baseline scan"),
+    scan_b: int = Query(..., description="ID of the scan to compare against"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a diff between two scans belonging to the authenticated user."""
+    s_a = await _get_user_scan(scan_a, user.id, db)
+    s_b = await _get_user_scan(scan_b, user.id, db)
+
+    rules_a = set(
+        (await db.execute(select(Issue.rule_id).where(Issue.scan_id == scan_a).distinct())).scalars().all()
+    )
+    rules_b = set(
+        (await db.execute(select(Issue.rule_id).where(Issue.scan_id == scan_b).distinct())).scalars().all()
+    )
+
+    score_delta: float | None = None
+    if s_a.score is not None and s_b.score is not None:
+        score_delta = round(s_b.score - s_a.score, 1)
+
+    return ScanCompareOut(
+        scan_a=ScanOut.model_validate(s_a),
+        scan_b=ScanOut.model_validate(s_b),
+        score_delta=score_delta,
+        issues_delta=s_b.total_issues - s_a.total_issues,
+        critical_delta=s_b.critical_count - s_a.critical_count,
+        serious_delta=s_b.serious_count - s_a.serious_count,
+        moderate_delta=s_b.moderate_count - s_a.moderate_count,
+        minor_delta=s_b.minor_count - s_a.minor_count,
+        new_rules=sorted(rules_b - rules_a),
+        fixed_rules=sorted(rules_a - rules_b),
+    )
+
+
 @router.get("/scans/{scan_id}", response_model=ScanOut)
 async def get_scan(scan_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     scan = await _get_user_scan(scan_id, user.id, db)
