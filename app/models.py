@@ -16,6 +16,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+    webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")
 
 
 class Site(Base):
@@ -65,6 +66,21 @@ class Issue(Base):
     selector = Column(String(500), nullable=True)
     how_to_fix = Column(Text, nullable=True)
     scan = relationship("Scan", back_populates="issues")
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    url = Column(String(2048), nullable=False)
+    # HMAC-SHA256 signing secret — shown once at creation, stored in plaintext
+    # so users can verify incoming payloads on their servers.
+    secret = Column(String(64), nullable=False)
+    # JSON list of subscribed event types, e.g. ["scan.completed", "scan.failed"]
+    events = Column(JSON, nullable=False, default=list)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    user = relationship("User", back_populates="webhooks")
 
 
 class ApiKey(Base):

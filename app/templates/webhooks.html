@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhooks - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .webhooks-page { padding: 32px 0; max-width: 760px; margin: 0 auto; }
+        .webhooks-page h1 { margin-bottom: 6px; }
+        .webhooks-page .subtitle { color: var(--text-muted); margin-bottom: 28px; font-size: 0.95rem; }
+
+        .webhook-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 10px;
+        }
+        .webhook-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+        .webhook-icon {
+            width: 40px; height: 40px; border-radius: 8px;
+            background: var(--primary-light); color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; flex-shrink: 0;
+        }
+        .webhook-icon.inactive {
+            background: var(--surface-2); color: var(--text-muted);
+        }
+        .webhook-info { flex: 1; min-width: 0; }
+        .webhook-url {
+            font-weight: 600; font-size: 0.93rem;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .webhook-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 3px; }
+        .webhook-events { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .event-badge {
+            background: var(--primary-light); color: var(--primary);
+            border-radius: 20px; padding: 2px 10px; font-size: 0.78rem;
+            font-weight: 500; white-space: nowrap;
+        }
+        .event-badge.failed { background: var(--red-light); color: var(--red); }
+        .webhook-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+        .badge-inactive {
+            background: var(--surface-2); color: var(--text-muted);
+            border: 1px solid var(--border); border-radius: 20px;
+            padding: 2px 10px; font-size: 0.78rem; font-weight: 500;
+        }
+
+        .new-secret-banner {
+            background: var(--green-light);
+            border: 1px solid var(--green);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .new-secret-banner p { font-size: 0.88rem; color: var(--green); margin-bottom: 10px; font-weight: 600; }
+        .secret-value-row { display: flex; align-items: center; gap: 8px; }
+        .secret-value-row code {
+            flex: 1; font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem; background: #fff; border: 1px solid var(--green);
+            padding: 8px 12px; border-radius: 8px; word-break: break-all;
+            color: var(--text);
+        }
+
+        .create-form {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+        .create-form h2 { font-size: 1rem; margin-bottom: 16px; }
+        .create-form .events-group { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+        .create-form .checkbox-label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.9rem; cursor: pointer; user-select: none;
+        }
+        .create-form .checkbox-label input[type="checkbox"] {
+            width: 16px; height: 16px; cursor: pointer;
+        }
+
+        .docs-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            font-size: 0.88rem;
+        }
+        .docs-box h3 { font-size: 0.95rem; margin-bottom: 10px; }
+        .docs-box code {
+            display: block;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem;
+            overflow-x: auto;
+            white-space: pre;
+            margin: 8px 0;
+            color: var(--text);
+        }
+        .docs-box p { color: var(--text-muted); line-height: 1.6; margin-bottom: 8px; }
+
+        .empty-state {
+            text-align: center; padding: 48px 0; color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+        .empty-state p { font-size: 0.9rem; }
+
+        @media (max-width: 600px) {
+            .webhook-card-header { flex-wrap: wrap; }
+            .webhook-actions { width: 100%; justify-content: flex-end; }
+        }
+    </style>
+</head>
+<body>
+    <nav><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <div class="links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="#" id="logout-btn">Log out</a>
+        </div>
+    </div></nav>
+
+    <div class="container">
+        <div class="webhooks-page">
+            <a href="/dashboard" class="back-link" aria-label="Back to Dashboard">&#8592; Dashboard</a>
+            <h1>Webhooks</h1>
+            <p class="subtitle">
+                Receive HTTP POST notifications when scans complete or fail.
+                Each request is signed with <code style="font-size:0.82rem;background:var(--surface-2);padding:2px 6px;border-radius:4px;">X-AccessWave-Signature</code> so you can verify authenticity.
+            </p>
+
+            <!-- Newly-created webhook secret banner (shown once) -->
+            <div id="new-secret-banner" class="new-secret-banner" role="alert" aria-live="polite">
+                <p>&#x2713; Save your signing secret now &mdash; it won&rsquo;t be shown again.</p>
+                <div class="secret-value-row">
+                    <code id="new-secret-value"></code>
+                    <button class="btn btn-sm btn-outline" onclick="copySecret()" aria-label="Copy signing secret to clipboard">Copy</button>
+                </div>
+            </div>
+
+            <!-- Create form -->
+            <div class="create-form">
+                <h2>Register new webhook</h2>
+                <div id="create-error" class="error-msg" role="alert"></div>
+                <form id="create-form" novalidate>
+                    <div class="form-group">
+                        <label for="wh-url">Endpoint URL <span aria-hidden="true">*</span></label>
+                        <input type="url" id="wh-url" name="url" required
+                               placeholder="https://your-server.com/hooks/accesswave"
+                               autocomplete="off" aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <label>Events to subscribe</label>
+                        <div class="events-group" role="group" aria-label="Webhook events">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="events" value="scan.completed" checked>
+                                scan.completed
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="events" value="scan.failed">
+                                scan.failed
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">+ Register webhook</button>
+                </form>
+            </div>
+
+            <!-- Webhook list -->
+            <div id="webhooks-list">
+                <p style="color:var(--text-muted)">Loading&hellip;</p>
+            </div>
+
+            <!-- Signature verification docs -->
+            <div class="docs-box" aria-labelledby="docs-heading">
+                <h3 id="docs-heading">Verifying signatures</h3>
+                <p>Each POST request includes an <strong>X-AccessWave-Signature</strong> header with a <code style="display:inline;background:none;border:none;padding:0;font-size:inherit">sha256=&lt;hex&gt;</code> HMAC-SHA256 digest of the raw request body, signed with your webhook&rsquo;s secret.</p>
+                <p>Example verification in Python:</p>
+<code>import hashlib, hmac
+
+def verify(secret: str, body: bytes, signature: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), body, digestmod=hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)</code>
+                <p>Return a <strong>2xx</strong> status code within 10 seconds to acknowledge delivery. Failed deliveries are not retried automatically.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    (function () {
+        const token = localStorage.getItem('token');
+        if (!token) { window.location.href = '/login'; return; }
+
+        document.getElementById('logout-btn').addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+
+        async function api(method, path, body) {
+            const opts = {
+                method,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                },
+            };
+            if (body !== undefined) opts.body = JSON.stringify(body);
+            const res = await fetch(path, opts);
+            if (!res.ok) {
+                const err = await res.json().catch(function () { return { detail: 'Request failed' }; });
+                throw new Error(err.detail || 'Request failed');
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        }
+
+        function fmtDate(iso) {
+            if (!iso) return null;
+            return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function escHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderWebhooks(webhooks) {
+            const el = document.getElementById('webhooks-list');
+            if (!webhooks.length) {
+                el.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon" aria-hidden="true">&#x1F4E1;</div>
+                        <p>No webhooks registered yet. Add one above to start receiving notifications.</p>
+                    </div>`;
+                return;
+            }
+
+            el.innerHTML = webhooks.map(function (wh) {
+                var eventBadges = (wh.events || []).map(function (e) {
+                    var cls = e === 'scan.failed' ? 'failed' : '';
+                    return '<span class="event-badge ' + cls + '">' + escHtml(e) + '</span>';
+                }).join('');
+
+                var statusBadge = wh.is_active
+                    ? ''
+                    : '<span class="badge-inactive">Paused</span>';
+
+                var iconCls = wh.is_active ? '' : 'inactive';
+                var toggleLabel = wh.is_active ? 'Pause' : 'Resume';
+                var toggleAriaLabel = (wh.is_active ? 'Pause webhook for ' : 'Resume webhook for ') + escHtml(wh.url);
+
+                return `
+                <div class="webhook-card" data-id="${wh.id}">
+                    <div class="webhook-card-header">
+                        <div class="webhook-icon ${iconCls}" aria-hidden="true">&#x1F4E1;</div>
+                        <div class="webhook-info">
+                            <div class="webhook-url" title="${escHtml(wh.url)}">${escHtml(wh.url)}</div>
+                            <div class="webhook-meta">Created ${fmtDate(wh.created_at)} ${statusBadge}</div>
+                            <div class="webhook-events" aria-label="Subscribed events">${eventBadges}</div>
+                        </div>
+                        <div class="webhook-actions">
+                            <button class="btn btn-sm btn-outline"
+                                    onclick="testWebhook(${wh.id})"
+                                    aria-label="Send test delivery to ${escHtml(wh.url)}">
+                                Test
+                            </button>
+                            <button class="btn btn-sm btn-outline"
+                                    onclick="toggleWebhook(${wh.id}, ${wh.is_active})"
+                                    aria-label="${toggleAriaLabel}">
+                                ${toggleLabel}
+                            </button>
+                            <button class="btn btn-sm btn-danger"
+                                    onclick="deleteWebhook(${wh.id})"
+                                    aria-label="Delete webhook for ${escHtml(wh.url)}">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadWebhooks() {
+            try {
+                const webhooks = await api('GET', '/api/webhooks');
+                renderWebhooks(webhooks);
+            } catch (e) {
+                document.getElementById('webhooks-list').innerHTML =
+                    '<p style="color:var(--red)">Failed to load webhooks: ' + escHtml(e.message) + '</p>';
+            }
+        }
+
+        document.getElementById('create-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const errEl = document.getElementById('create-error');
+            errEl.style.display = 'none';
+
+            const url = document.getElementById('wh-url').value.trim();
+            const checkboxes = document.querySelectorAll('#create-form input[name="events"]:checked');
+            const events = Array.from(checkboxes).map(function (cb) { return cb.value; });
+
+            if (!url) {
+                errEl.textContent = 'Please enter an endpoint URL.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (!events.length) {
+                errEl.textContent = 'Please select at least one event to subscribe to.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const created = await api('POST', '/api/webhooks', { url, events });
+                document.getElementById('new-secret-value').textContent = created.secret;
+                const banner = document.getElementById('new-secret-banner');
+                banner.style.display = 'block';
+                banner.focus();
+                document.getElementById('wh-url').value = '';
+                await loadWebhooks();
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+            }
+        });
+
+        window.deleteWebhook = async function (id) {
+            if (!confirm('Delete this webhook? Deliveries will stop immediately.')) return;
+            try {
+                await api('DELETE', '/api/webhooks/' + id);
+                document.getElementById('new-secret-banner').style.display = 'none';
+                await loadWebhooks();
+            } catch (err) {
+                alert('Failed to delete webhook: ' + err.message);
+            }
+        };
+
+        window.toggleWebhook = async function (id, currentlyActive) {
+            try {
+                await api('PATCH', '/api/webhooks/' + id, { is_active: !currentlyActive });
+                await loadWebhooks();
+            } catch (err) {
+                alert('Failed to update webhook: ' + err.message);
+            }
+        };
+
+        window.testWebhook = async function (id) {
+            var btn = document.querySelector('[data-id="' + id + '"] .btn-outline');
+            if (btn) { btn.textContent = 'Sending…'; btn.disabled = true; }
+            try {
+                await api('POST', '/api/webhooks/' + id + '/test');
+                if (btn) { btn.textContent = 'Sent!'; }
+                setTimeout(function () {
+                    if (btn) { btn.textContent = 'Test'; btn.disabled = false; }
+                }, 2500);
+            } catch (err) {
+                if (btn) { btn.textContent = 'Test'; btn.disabled = false; }
+                alert('Test delivery failed: ' + err.message);
+            }
+        };
+
+        window.copySecret = function () {
+            var val = document.getElementById('new-secret-value').textContent;
+            navigator.clipboard.writeText(val).then(function () {
+                var btn = document.querySelector('#new-secret-banner .btn');
+                btn.textContent = 'Copied!';
+                setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+            }).catch(function () {
+                alert('Copy failed — please select and copy the secret manually.');
+            });
+        };
+
+        loadWebhooks();
+    }());
+    </script>
+</body>
+</html>

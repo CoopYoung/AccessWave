@@ -18,10 +18,11 @@ from app.metrics import (
     SCAN_PAGES_SCANNED,
     SCAN_SCORE,
 )
-from app.models import Issue, Scan, Site
+from app.models import Issue, Scan, Site, Webhook
 from app.services.crawler import crawl_site
 from app.services.scan_progress import clear_progress, update_progress
 from app.services.scanner import IssueFound, calculate_score, scan_html
+from app.services.webhook_sender import fire_event
 
 logger = structlog.get_logger("accesswave.runner")
 
@@ -122,11 +123,46 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
             update_progress(scan.id, pages_done=pages_total, pages_total=pages_total, status="completed")
             logger.info(f"Scan {scan.id} complete: {scan.pages_scanned} pages, {scan.total_issues} issues, score {scan.score}")
 
+            # Fire scan.completed webhooks for the site owner
+            wh_result = await db.execute(
+                select(Webhook).where(Webhook.user_id == site.user_id, Webhook.is_active == True)
+            )
+            webhooks = wh_result.scalars().all()
+            await fire_event(webhooks, "scan.completed", {
+                "scan_id": scan.id,
+                "site_id": site.id,
+                "site_name": site.name,
+                "site_url": site.url,
+                "score": scan.score,
+                "pages_scanned": scan.pages_scanned,
+                "total_issues": scan.total_issues,
+                "critical_count": scan.critical_count,
+                "serious_count": scan.serious_count,
+                "moderate_count": scan.moderate_count,
+                "minor_count": scan.minor_count,
+            })
+
         except Exception as e:
             logger.error("scan_failed", scan_id=scan.id, site_id=scan.site_id, error=str(e), exc_info=True)
             scan.status = "failed"
             scan.completed_at = datetime.datetime.utcnow()
             SCANS_FAILED.inc()
+
+            # Fire scan.failed webhooks
+            try:
+                wh_result = await db.execute(
+                    select(Webhook).where(Webhook.user_id == site.user_id, Webhook.is_active == True)
+                )
+                webhooks = wh_result.scalars().all()
+                await fire_event(webhooks, "scan.failed", {
+                    "scan_id": scan.id,
+                    "site_id": site.id,
+                    "site_name": site.name,
+                    "site_url": site.url,
+                    "error": str(e),
+                })
+            except Exception:
+                pass  # Never let webhook errors mask the original failure
 
         finally:
             ACTIVE_SCANS.dec()
