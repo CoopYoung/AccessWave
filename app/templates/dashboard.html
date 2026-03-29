@@ -10,7 +10,7 @@
     <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#dash-main" class="skip-link">Skip to main content</a>
     <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
@@ -26,7 +26,7 @@
         </div>
     </div></nav>
 
-    <main id="main-content">
+    <main id="dash-main">
     <div class="container dash">
         <div class="dash-header">
             <h1>Dashboard</h1>
@@ -54,6 +54,10 @@
                     <div class="chart-wrap chart-wrap-sm">
                         <canvas id="severity-chart" role="img" aria-label="Doughnut chart showing total issues broken down by severity"></canvas>
                     </div>
+                </div>
+            </div>
+        </div>
+
         <div class="activity-section" aria-labelledby="heatmap-heading">
             <h2 class="section-title" id="heatmap-heading">Scan Activity — Last 12 Months</h2>
             <div class="heatmap-wrap">
@@ -76,26 +80,15 @@
         </div>
 
         <div id="onboarding-banner"></div>
-        <div id="main-content"><p style="color:var(--text-muted)">Loading...</p></div>
-    </div>
-
-    <div id="add-modal" class="modal-overlay"><div class="modal">
-        <h3>Add a Site</h3>
-        <form id="site-form" novalidate>
-            <div class="form-group"><label for="site-name">Site Name</label><input type="text" id="site-name" name="name" required placeholder="My Website"></div>
-            <div class="form-group"><label for="site-url">URL</label><input type="url" id="site-url" name="url" required placeholder="https://example.com"></div>
-            <button type="submit" class="btn btn-primary">Add Site</button>
-            <button type="button" class="btn btn-outline" id="close-modal" style="margin-left:8px">Cancel</button>
-        </form>
-    </div></div>
-        <div id="dash-content" aria-live="polite" aria-atomic="false"><p style="color:var(--text-muted)">Loading...</p></div>
+        <div id="main-content" aria-live="polite" aria-atomic="false"><p style="color:var(--text-muted)">Loading...</p></div>
     </div>
     </main>
 
+    <!-- Add Site Modal -->
     <div id="add-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-modal-title" aria-hidden="true">
         <div class="modal">
             <h3 id="add-modal-title">Add a Site</h3>
-            <form id="site-form">
+            <form id="site-form" novalidate>
                 <div class="form-group"><label for="site-name">Site Name</label><input type="text" id="site-name" name="name" required placeholder="My Website"></div>
                 <div class="form-group"><label for="site-url">URL</label><input type="url" id="site-url" name="url" required placeholder="https://example.com"></div>
                 <button type="submit" class="btn btn-primary">Add Site</button>
@@ -104,24 +97,7 @@
         </div>
     </div>
 
-    <div id="shortcuts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title" aria-hidden="true">
-        <div class="modal shortcuts-modal">
-            <div class="shortcuts-modal-header">
-                <h3 id="shortcuts-modal-title">Keyboard Shortcuts</h3>
-                <button class="btn-icon" id="close-shortcuts" aria-label="Close keyboard shortcuts">✕</button>
-            </div>
-            <dl class="shortcuts-list">
-                <div class="shortcut-row"><dt><kbd>N</kbd></dt><dd>Add new site</dd></div>
-                <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Back to sites list</dd></div>
-                <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Refresh current view</dd></div>
-                <div class="shortcut-row"><dt><kbd>Shift + /</kbd></dt><dd>Show this help</dd></div>
-                <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close modal / go back</dd></div>
-            </dl>
-        </div>
-    </div>
-
-    <div class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
-
+    <!-- Edit Site Modal -->
     <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
         <div class="modal">
             <h3 id="edit-modal-title">Edit Site</h3>
@@ -141,13 +117,24 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>
-    <script>if (window.hljs) hljs.configure({ languages: ['xml'] });</script>
-    <!-- jsPDF + autoTable: loaded async so they don't block page render.
-         exportPDF() checks window.jspdf before use and shows a friendly
-         "still loading" toast if the user clicks before the scripts arrive. -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="shortcuts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title" aria-hidden="true">
+        <div class="modal shortcuts-modal">
+            <div class="shortcuts-modal-header">
+                <h3 id="shortcuts-modal-title">Keyboard Shortcuts</h3>
+                <button class="btn-icon" id="close-shortcuts" aria-label="Close keyboard shortcuts">✕</button>
+            </div>
+            <dl class="shortcuts-list">
+                <div class="shortcut-row"><dt><kbd>N</kbd></dt><dd>Add new site</dd></div>
+                <div class="shortcut-row"><dt><kbd>B</kbd></dt><dd>Back to sites list</dd></div>
+                <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Refresh current view</dd></div>
+                <div class="shortcut-row"><dt><kbd>Shift + /</kbd></dt><dd>Show this help</dd></div>
+                <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close modal / go back</dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Accessibility Badge Modal -->
     <div id="badge-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="badge-modal-title">
         <div class="modal">
             <h3 id="badge-modal-title">Accessibility Badge</h3>
@@ -186,6 +173,12 @@
         <div id="wcag-panel-body" class="wcag-panel-content"></div>
     </aside>
 
+    <div class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" crossorigin="anonymous"></script>
+    <script>if (window.hljs) hljs.configure({ languages: ['xml'] });</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script src="/static/js/app.js"></script>
     <script>initDarkMode(); initDashboard();</script>
 </body>
