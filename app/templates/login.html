@@ -1,27 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Log in - AccessWave</title><link rel="stylesheet" href="/static/css/style.css"><script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script></head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+</head>
 <body>
-    <nav><div class="container"><a href="/" class="logo">Access<span>Wave</span></a><div class="links"><button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button></div></div></nav>
-    <div class="auth-page"><div class="auth-card">
-        <h2>Welcome back</h2><p class="subtitle">Log in to your dashboard</p>
-        <div id="error-msg" class="error-msg"></div>
-        <form id="auth-form" novalidate>
-            <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com"></div>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <nav aria-label="Main navigation"><div class="container"><a href="/" class="logo">Access<span>Wave</span></a></div></nav>
+    <nav aria-label="Main navigation">
+        <div class="container">
+            <a href="/" class="logo">Access<span>Wave</span></a>
+            <div class="links">
+                <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+            </div>
+        </div>
+    </nav>
+
     <main id="main-content">
-    <div class="auth-page"><div class="auth-card">
-        <h2>Welcome back</h2><p class="subtitle">Log in to your dashboard</p>
-        <div id="error-msg" class="error-msg" role="alert"></div>
-        <form id="auth-form" novalidate>
-            <div class="form-group"><label for="email">Email</label><input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email"></div>
-            <div class="form-group"><label for="password">Password</label><input type="password" id="password" name="password" required autocomplete="current-password"></div>
-            <button type="submit" class="btn btn-primary">Sign In</button>
-        </form>
-        <p class="footer">No account? <a href="/register">Sign up free</a></p>
-    </div></div>
-    <script src="/static/js/app.js"></script><script>initDarkMode(); initAuth('login');</script>
+        <div class="auth-page">
+            <div class="auth-card">
+
+                <!-- Step 1: email + password -->
+                <div id="login-step">
+                    <h2>Welcome back</h2>
+                    <p class="subtitle">Log in to your dashboard</p>
+                    <div id="error-msg" class="error-msg" role="alert"></div>
+                    <form id="auth-form" novalidate>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" required autocomplete="current-password">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Sign In</button>
+                    </form>
+                    <p class="footer">No account? <a href="/register">Sign up free</a></p>
+                </div>
+
+                <!-- Step 2: TOTP verification (shown when account has 2FA enabled) -->
+                <div id="totp-step" hidden>
+                    <h2>Two-factor authentication</h2>
+                    <p class="subtitle">Enter the 6-digit code from your authenticator app.</p>
+                    <div id="totp-error-msg" class="error-msg" role="alert"></div>
+                    <form id="totp-form" novalidate>
+                        <div class="form-group">
+                            <label for="totp-login-code">Authentication code</label>
+                            <input type="text" id="totp-login-code" inputmode="numeric" pattern="[0-9]*"
+                                   autocomplete="one-time-code" maxlength="6" placeholder="000000"
+                                   aria-describedby="totp-login-hint">
+                            <span id="totp-login-hint" class="field-hint">Opens in Google Authenticator, Authy, or any TOTP app.</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Verify</button>
+                    </form>
+                    <p class="footer"><a href="#" id="totp-back-link">&#8592; Back to login</a></p>
+                </div>
+
+            </div>
+        </div>
     </main>
-    <script src="/static/js/app.js"></script><script>initAuth('login');</script>
-</body></html>
+
+    <script src="/static/js/app.js"></script>
+    <script>initDarkMode(); initAuth('login');</script>
+</body>
+</html>

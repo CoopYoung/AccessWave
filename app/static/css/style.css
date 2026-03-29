@@ -1061,3 +1061,9 @@ kbd {
     .site-row, .site-row-header { grid-template-columns: 40px 1fr auto; }
     .site-row-header span:nth-child(3), .row-time { display: none; }
 }
+
+/* ── Two-Factor Authentication (settings) ─────────────────────────────────── */
+.twofa-status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.twofa-status-badge { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); border-radius: 100px; padding: 4px 12px; font-size: 0.85rem; font-weight: 700; }
+.twofa-qrcode { display: inline-block; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 4px; }
+.twofa-secret { display: block; font-family: monospace; font-size: 0.9rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; word-break: break-all; letter-spacing: 0.1em; color: var(--text); margin-bottom: 4px; user-select: all; }

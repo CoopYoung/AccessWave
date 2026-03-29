@@ -26,6 +26,21 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode({"sub": str(user_id), "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_partial_token(user_id: int) -> str:
+    """Short-lived token issued after password check when 2FA is enabled.
+
+    Must be exchanged via POST /api/auth/2fa/verify (with a valid TOTP code)
+    for a full access token.  The ``type`` claim prevents it from being used
+    as a regular bearer token.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    return jwt.encode(
+        {"sub": str(user_id), "type": "2fa_pending", "exp": expire},
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+
 async def _resolve_api_key(token: str, db: AsyncSession) -> User:
     """Authenticate via a raw API key (starts with 'aw_')."""
     digest = hashlib.sha256(token.encode()).hexdigest()
