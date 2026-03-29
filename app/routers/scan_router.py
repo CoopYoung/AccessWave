@@ -17,6 +17,16 @@ from app.limiter import limiter
 from app.models import Issue, Scan, Site, User
 from app.services.scan_runner import run_scan
 
+# Lazy import: only load Celery machinery when it is actually enabled so
+# that the app starts fine even without Redis / celery installed.
+def _dispatch_scan(scan_id: int, max_pages: int, background_tasks: BackgroundTasks) -> None:
+    """Send a scan to Celery if enabled, otherwise use BackgroundTasks."""
+    if settings.USE_CELERY:
+        from app.tasks import celery_run_scan  # noqa: PLC0415
+        celery_run_scan.delay(scan_id, max_pages)
+    else:
+        background_tasks.add_task(_run_scan_task, scan_id, max_pages)
+
 router = APIRouter(prefix="/api", tags=["scans"])
 logger = structlog.get_logger("accesswave.scan")
 
@@ -243,7 +253,7 @@ async def start_scan(
     await db.refresh(scan)
     logger.info("scan_queued", user_id=user.id, site_id=site.id, scan_id=scan.id, max_pages=plan["pages_per_scan"])
 
-    background_tasks.add_task(_run_scan_task, scan.id, plan["pages_per_scan"])
+    _dispatch_scan(scan.id, plan["pages_per_scan"], background_tasks)
     return scan
 
 

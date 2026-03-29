@@ -77,6 +77,12 @@ class Settings:
     HSTS_ENABLED: bool = os.getenv("HSTS_ENABLED", "false").lower() == "true"
     # Optional URI for CSP violation reports (leave blank to omit the directive).
     CSP_REPORT_URI: str = os.getenv("CSP_REPORT_URI", "")
+    # Celery task queue
+    # Set USE_CELERY=true and configure the URLs below to enable distributed scanning.
+    # When disabled (default) scans run in FastAPI background tasks (single-process only).
+    USE_CELERY: bool = os.getenv("USE_CELERY", "false").lower() == "true"
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
 
 settings = Settings()

@@ -18,3 +18,4 @@ cssutils==2.11.1
 slowapi==0.1.9
 alembic==1.13.3
 structlog==24.4.0
+celery[redis]==5.4.0
