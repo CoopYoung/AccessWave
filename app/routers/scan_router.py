@@ -16,6 +16,9 @@ import html as _html
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import case, func, nullslast, select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, HttpUrl, field_validator
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -25,6 +28,8 @@ from app.limiter import limiter
 from app.database import async_session, get_db
 from app.models import Issue, Scan, Site, User
 from app.services.scan_progress import get_progress
+from app.models import Issue, Scan, Site, User
+from app.scheduler import next_run_time
 from app.services.scan_runner import run_scan
 
 # Lazy import: only load Celery machinery when it is actually enabled so
@@ -60,6 +65,8 @@ _BLOCKED_NETWORKS = [
 ]
 
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "metadata.google.internal"})
+
+VALID_SCHEDULES = frozenset({"none", "daily", "weekly", "monthly"})
 
 
 class SiteCreate(BaseModel):
@@ -105,10 +112,23 @@ class SiteUpdate(BaseModel):
     url: HttpUrl | None = None
 
 
+class ScheduleUpdate(BaseModel):
+    schedule: str
+
+    @field_validator("schedule")
+    @classmethod
+    def _check_schedule(cls, v: str) -> str:
+        if v not in VALID_SCHEDULES:
+            raise ValueError(f"schedule must be one of: {', '.join(sorted(VALID_SCHEDULES))}")
+        return v
+
+
 class SiteOut(BaseModel):
     id: int
     name: str
     url: str
+    schedule: str = "none"
+    next_scan_at: datetime.datetime | None = None
     last_score: float | None = None
     last_scan_at: datetime.datetime | None = None
     created_at: datetime.datetime
@@ -212,6 +232,8 @@ async def list_sites(user: User = Depends(get_current_user), db: AsyncSession = 
         last_scan = scan_result.scalar_one_or_none()
         out.append(SiteOut(
             id=site.id, name=site.name, url=site.url, created_at=site.created_at,
+            schedule=site.schedule,
+            next_scan_at=site.next_scan_at,
             last_score=last_scan.score if last_scan else None,
             last_scan_at=last_scan.completed_at if last_scan else None,
         ))
@@ -256,6 +278,54 @@ async def delete_site(site_id: int, user: User = Depends(get_current_user), db: 
     logger.info("site_deleted", user_id=user.id, site_id=site.id, site_url=site.url)
     await db.delete(site)
     await db.commit()
+
+
+@router.patch("/sites/{site_id}/schedule", response_model=SiteOut)
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
+async def update_schedule(
+    request: Request,
+    site_id: int,
+    body: ScheduleUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or clear the automatic scan schedule for a site.
+
+    - ``none``    – disable automatic scanning
+    - ``daily``   – scan every 24 hours
+    - ``weekly``  – scan every 7 days
+    - ``monthly`` – scan every 30 days
+
+    When a schedule is enabled the first run is scheduled from *now*.
+    """
+    site = await _get_user_site(site_id, user.id, db)
+    site.schedule = body.schedule
+    site.next_scan_at = (
+        next_run_time(body.schedule, datetime.datetime.utcnow())
+        if body.schedule != "none"
+        else None
+    )
+    await db.commit()
+    await db.refresh(site)
+
+    # Fetch last scan info to populate SiteOut
+    last_scan_result = await db.execute(
+        select(Scan)
+        .where(Scan.site_id == site.id, Scan.status == "completed")
+        .order_by(Scan.completed_at.desc())
+        .limit(1)
+    )
+    last_scan = last_scan_result.scalar_one_or_none()
+    return SiteOut(
+        id=site.id,
+        name=site.name,
+        url=site.url,
+        schedule=site.schedule,
+        next_scan_at=site.next_scan_at,
+        created_at=site.created_at,
+        last_score=last_scan.score if last_scan else None,
+        last_scan_at=last_scan.completed_at if last_scan else None,
+    )
 
 
 # --- Scans ---

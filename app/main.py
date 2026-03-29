@@ -23,6 +23,7 @@ from app.logging_config import configure_logging
 from app.routers import auth_router, billing_router, scan_router
 from app.security_headers import SecurityHeadersMiddleware
 from app.routers import api_keys_router
+from app.scheduler import start_scheduler, stop_scheduler
 
 configure_logging(log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
 logger = structlog.get_logger("accesswave")
@@ -32,7 +33,10 @@ logger = structlog.get_logger("accesswave")
 async def lifespan(app: FastAPI):
     await init_db()
     logger.info("startup_complete", log_level=settings.LOG_LEVEL, log_format=settings.LOG_FORMAT)
+    start_scheduler()
+    logger.info("AccessWave started")
     yield
+    stop_scheduler()
 
 
 app = FastAPI(title="AccessWave", version="1.0.0", lifespan=lifespan)
