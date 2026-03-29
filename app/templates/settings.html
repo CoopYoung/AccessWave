@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <div class="links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="#" id="logout-btn">Log out</a>
+        </div>
+    </div></nav>
+
+    <main class="container settings-page" id="settings-root">
+        <a href="/dashboard" class="back-link" aria-label="Back to Dashboard">&#8592; Dashboard</a>
+        <h1 class="settings-title">Account Settings</h1>
+
+        <!-- Profile section -->
+        <section class="settings-card" aria-labelledby="profile-heading">
+            <h2 id="profile-heading" class="settings-card-title">Profile</h2>
+            <div id="profile-banner" class="settings-banner" role="status" aria-live="polite" hidden></div>
+            <form id="profile-form" novalidate>
+                <div class="form-group">
+                    <label for="profile-email">Email address</label>
+                    <input type="email" id="profile-email" name="email" autocomplete="email" required>
+                </div>
+                <div class="settings-plan-row">
+                    <span class="settings-label">Current plan</span>
+                    <span id="profile-plan" class="badge badge-plan">--</span>
+                    <a href="#" onclick="upgradePlan('pro')" class="settings-upgrade-link">Upgrade</a>
+                </div>
+                <div class="settings-plan-row">
+                    <span class="settings-label">Member since</span>
+                    <span id="profile-since" class="settings-value-text">--</span>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+            </form>
+        </section>
+
+        <!-- Password section -->
+        <section class="settings-card" aria-labelledby="password-heading">
+            <h2 id="password-heading" class="settings-card-title">Change Password</h2>
+            <div id="password-banner" class="settings-banner" role="status" aria-live="polite" hidden></div>
+            <form id="password-form" novalidate>
+                <div class="form-group">
+                    <label for="current-password">Current password</label>
+                    <input type="password" id="current-password" name="current_password" autocomplete="current-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">New password</label>
+                    <input type="password" id="new-password" name="new_password" autocomplete="new-password" required minlength="8">
+                    <span class="field-hint">Minimum 8 characters</span>
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm new password</label>
+                    <input type="password" id="confirm-password" name="confirm_password" autocomplete="new-password" required minlength="8">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Update password</button>
+            </form>
+        </section>
+
+        <!-- Danger zone -->
+        <section class="settings-card settings-danger-zone" aria-labelledby="danger-heading">
+            <h2 id="danger-heading" class="settings-card-title settings-danger-title">Danger Zone</h2>
+            <p class="settings-danger-desc">Permanently delete your account and all associated data. This action cannot be undone.</p>
+            <button class="btn btn-danger btn-sm" id="open-delete-modal">Delete my account</button>
+        </section>
+    </main>
+
+    <!-- Delete account confirmation modal -->
+    <div id="delete-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <div class="modal">
+            <h3 id="delete-modal-title">Delete Account</h3>
+            <p style="color:var(--text-muted);margin-bottom:20px;font-size:0.9rem">
+                All your sites, scans, and issues will be permanently removed. Enter your password to confirm.
+            </p>
+            <div id="delete-banner" class="settings-banner" role="alert" aria-live="assertive" hidden></div>
+            <form id="delete-form" novalidate>
+                <div class="form-group">
+                    <label for="delete-password">Password</label>
+                    <input type="password" id="delete-password" name="password" autocomplete="current-password" required>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:4px">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete permanently</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="close-delete-modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>initSettings();</script>
+</body>
+</html>
