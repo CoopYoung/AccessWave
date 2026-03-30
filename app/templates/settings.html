@@ -152,6 +152,88 @@
             </form>
         </section>
 
+        <!-- Two-factor authentication section -->
+        <section class="settings-card" aria-labelledby="2fa-heading">
+            <h2 id="2fa-heading" class="settings-card-title">Two-Factor Authentication</h2>
+            <div id="2fa-banner" class="settings-banner" role="status" aria-live="polite" hidden></div>
+
+            <!-- Status row -->
+            <div class="settings-plan-row" style="margin-bottom:16px">
+                <span class="settings-label">Status</span>
+                <span id="2fa-status-badge" class="badge" aria-live="polite">Loading&hellip;</span>
+            </div>
+
+            <!-- Panel shown when 2FA is disabled -->
+            <div id="2fa-disabled-panel">
+                <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px">
+                    Add an extra layer of security. Once enabled, you'll need a code from an authenticator
+                    app (Google Authenticator, Authy, etc.) every time you log in.
+                </p>
+                <button class="btn btn-primary btn-sm" id="start-2fa-setup-btn" type="button">
+                    Set up 2FA
+                </button>
+            </div>
+
+            <!-- Setup flow (hidden until "Set up 2FA" clicked) -->
+            <div id="2fa-setup-panel" hidden>
+                <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:12px">
+                    <strong>Step 1</strong> — Scan the QR code with your authenticator app, or enter the
+                    manual key below.
+                </p>
+
+                <!-- QR code rendered as an <img> from a Google Charts-style URL -->
+                <div style="margin-bottom:16px;text-align:center" id="2fa-qr-container">
+                    <img id="2fa-qr-img" src="" alt="QR code for two-factor authentication setup"
+                         width="180" height="180"
+                         style="border:4px solid var(--surface);border-radius:8px;background:#fff">
+                </div>
+
+                <div style="margin-bottom:16px">
+                    <label for="2fa-manual-key" style="font-size:0.8rem;font-weight:500;color:var(--text-muted);display:block;margin-bottom:4px">
+                        Manual entry key
+                    </label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <code id="2fa-manual-key" tabindex="0"
+                              style="font-size:0.95rem;letter-spacing:0.12em;padding:6px 12px;
+                                     background:var(--surface-2,#f1f5f9);border-radius:6px;
+                                     border:1px solid var(--border);word-break:break-all">
+                            &mdash;
+                        </code>
+                        <button type="button" id="copy-2fa-key-btn" class="btn btn-outline btn-sm"
+                                aria-label="Copy manual key to clipboard">Copy</button>
+                    </div>
+                </div>
+
+                <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:10px">
+                    <strong>Step 2</strong> — Enter the 6-digit code from your app to confirm setup.
+                </p>
+                <form id="2fa-enable-form" novalidate>
+                    <div class="form-group" style="max-width:200px;margin-bottom:14px">
+                        <label for="2fa-confirm-code">Authenticator code</label>
+                        <input type="text" id="2fa-confirm-code" inputmode="numeric"
+                               pattern="[0-9 ]{6,7}" maxlength="7" required autocomplete="one-time-code"
+                               placeholder="000000"
+                               style="letter-spacing:0.2em;font-size:1.1rem;text-align:center">
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                        <button type="submit" class="btn btn-primary btn-sm">Enable 2FA</button>
+                        <button type="button" id="cancel-2fa-setup-btn" class="btn btn-outline btn-sm">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Panel shown when 2FA is enabled -->
+            <div id="2fa-enabled-panel" hidden>
+                <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px">
+                    Two-factor authentication is active. You will be asked for a code from your
+                    authenticator app each time you log in.
+                </p>
+                <button class="btn btn-danger btn-sm" id="open-disable-2fa-modal-btn" type="button">
+                    Disable 2FA
+                </button>
+            </div>
+        </section>
+
         <!-- Activity log section -->
         <section class="settings-card" aria-labelledby="audit-heading">
             <h2 id="audit-heading" class="settings-card-title">Activity Log</h2>
@@ -194,6 +276,27 @@
             <button class="btn btn-danger btn-sm" id="open-delete-modal">Delete my account</button>
         </section>
     </main>
+
+    <!-- Disable 2FA confirmation modal -->
+    <div id="disable-2fa-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="disable-2fa-modal-title" hidden>
+        <div class="modal">
+            <h3 id="disable-2fa-modal-title">Disable Two-Factor Authentication</h3>
+            <p style="color:var(--text-muted);margin-bottom:20px;font-size:0.9rem">
+                Enter your password to disable 2FA. Your account will be less secure without it.
+            </p>
+            <div id="disable-2fa-banner" class="settings-banner" role="alert" aria-live="assertive" hidden></div>
+            <form id="disable-2fa-form" novalidate>
+                <div class="form-group">
+                    <label for="disable-2fa-password">Password</label>
+                    <input type="password" id="disable-2fa-password" name="password" autocomplete="current-password" required>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:4px">
+                    <button type="submit" class="btn btn-danger btn-sm">Disable 2FA</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="close-disable-2fa-modal-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Delete account confirmation modal -->
     <div id="delete-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">

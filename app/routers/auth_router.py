@@ -1,6 +1,7 @@
 import hashlib
 import structlog
 import datetime
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -8,7 +9,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import log_action
-from app.auth import create_access_token, create_password_reset_token, get_current_user, hash_password, verify_password
+from app.auth import create_access_token, create_pre_auth_token, create_password_reset_token, get_current_user, hash_password, verify_password
 from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
@@ -45,6 +46,32 @@ class RegisterRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(BaseModel):
+    """Returned by POST /login — either a full token or a 2FA challenge."""
+    access_token: str | None = None
+    token_type: str = "bearer"
+    requires_totp: bool = False
+    pre_auth_token: str | None = None
+
+
+class TotpVerifyLoginRequest(BaseModel):
+    pre_auth_token: str
+    totp_code: str
+
+
+class TotpSetupResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class TotpEnableRequest(BaseModel):
+    totp_code: str
+
+
+class TotpDisableRequest(BaseModel):
+    password: str
 
 
 class UserOut(BaseModel):
@@ -119,11 +146,12 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=LoginResponse,
     summary="Log in",
     description=(
         "Authenticate with email + password (OAuth2 `password` flow). "
-        "Returns a short-lived Bearer JWT valid for the duration set in `ACCESS_TOKEN_EXPIRE_MINUTES`."
+        "If 2FA is enabled, returns `requires_totp: true` and a `pre_auth_token` instead of a full JWT. "
+        "Call POST /api/auth/login/totp with the pre_auth_token and TOTP code to complete login."
     ),
 )
 @limiter.limit(settings.RATE_LIMIT_AUTH_LOGIN)
@@ -133,15 +161,67 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
     if not user or not verify_password(form.password, user.hashed_password):
         logger.warning("login_failed", email=form.username)
         AUTH_ATTEMPTS.labels(endpoint="login", outcome="failure").inc()
-        # Log failure (user_id may be None if email not found)
         uid = user.id if user else None
         await log_action(db, action="login.failure", user_id=uid, request=request,
                          extra={"email": form.username})
         await db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # If 2FA is enabled, issue a pre-auth token instead of a full JWT
+    if user.totp_enabled and user.totp_secret:
+        pre_token = create_pre_auth_token(user.id)
+        logger.info("login_2fa_required", user_id=user.id)
+        AUTH_ATTEMPTS.labels(endpoint="login", outcome="2fa_required").inc()
+        await db.commit()
+        return LoginResponse(requires_totp=True, pre_auth_token=pre_token)
+
     logger.info("user_login", user_id=user.id, email=user.email)
     AUTH_ATTEMPTS.labels(endpoint="login", outcome="success").inc()
     await log_action(db, action="login.success", user_id=user.id, request=request)
+    await db.commit()
+    return LoginResponse(access_token=create_access_token(user.id))
+
+
+@router.post(
+    "/login/totp",
+    response_model=TokenResponse,
+    summary="Complete 2FA login",
+    description="Exchange a pre_auth_token + TOTP code for a full access token.",
+)
+@limiter.limit("10/minute")
+async def login_totp(
+    request: Request,
+    body: TotpVerifyLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(body.pre_auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired pre-auth token")
+    if payload.get("type") != "pre_auth":
+        raise HTTPException(status_code=401, detail="Invalid or expired pre-auth token")
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid or expired pre-auth token")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.totp_enabled or not user.totp_secret:
+        raise HTTPException(status_code=401, detail="Invalid or expired pre-auth token")
+
+    totp = pyotp.TOTP(user.totp_secret)
+    code = body.totp_code.strip().replace(" ", "")
+    if not totp.verify(code, valid_window=1):
+        AUTH_ATTEMPTS.labels(endpoint="login_totp", outcome="failure").inc()
+        await log_action(db, action="login.2fa_failure", user_id=user.id, request=request)
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Invalid authenticator code")
+
+    logger.info("user_login_2fa", user_id=user.id, email=user.email)
+    AUTH_ATTEMPTS.labels(endpoint="login_totp", outcome="success").inc()
+    await log_action(db, action="login.success", user_id=user.id, request=request,
+                     extra={"method": "2fa"})
     await db.commit()
     return TokenResponse(access_token=create_access_token(user.id))
 
@@ -277,3 +357,88 @@ async def reset_password(
     await db.commit()
     logger.info("password_reset_completed", user_id=user.id)
     return {"ok": True, "message": "Password updated. You can now log in."}
+
+
+# ── Two-Factor Authentication (TOTP) ─────────────────────────────────────────
+
+@router.get(
+    "/2fa/setup",
+    response_model=TotpSetupResponse,
+    summary="Begin 2FA setup",
+    description=(
+        "Generate a TOTP secret and provisioning URI for the authenticated user. "
+        "The secret is stored temporarily (2FA is NOT enabled until /2fa/enable is called). "
+        "Use the provisioning_uri to render a QR code with any TOTP library."
+    ),
+)
+async def setup_2fa(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    secret = pyotp.random_base32()
+    user.totp_secret = secret
+    user.totp_enabled = False  # not yet confirmed
+    await db.commit()
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(name=user.email, issuer_name="AccessWave")
+    return TotpSetupResponse(secret=secret, provisioning_uri=uri)
+
+
+@router.post(
+    "/2fa/enable",
+    status_code=200,
+    summary="Enable 2FA",
+    description="Verify the user's current TOTP code and activate 2FA on the account.",
+)
+async def enable_2fa(
+    request: Request,
+    body: TotpEnableRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.totp_secret:
+        raise HTTPException(status_code=400, detail="Call /2fa/setup first to generate a secret")
+    if user.totp_enabled:
+        raise HTTPException(status_code=400, detail="2FA is already enabled")
+    totp = pyotp.TOTP(user.totp_secret)
+    code = body.totp_code.strip().replace(" ", "")
+    if not totp.verify(code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid authenticator code — please try again")
+    user.totp_enabled = True
+    await log_action(db, action="2fa.enabled", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("2fa_enabled", user_id=user.id)
+    return {"ok": True, "message": "Two-factor authentication is now enabled."}
+
+
+@router.delete(
+    "/2fa/disable",
+    status_code=200,
+    summary="Disable 2FA",
+    description="Disable 2FA after confirming the user's password.",
+)
+async def disable_2fa(
+    request: Request,
+    body: TotpDisableRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.totp_enabled:
+        raise HTTPException(status_code=400, detail="2FA is not enabled on this account")
+    if not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+    user.totp_enabled = False
+    user.totp_secret = None
+    await log_action(db, action="2fa.disabled", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("2fa_disabled", user_id=user.id)
+    return {"ok": True, "message": "Two-factor authentication has been disabled."}
+
+
+@router.get(
+    "/2fa/status",
+    summary="Get 2FA status",
+    description="Returns whether 2FA is currently enabled for the authenticated user.",
+)
+async def get_2fa_status(user: User = Depends(get_current_user)):
+    return {"totp_enabled": user.totp_enabled}

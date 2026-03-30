@@ -26,6 +26,16 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode({"sub": str(user_id), "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_pre_auth_token(user_id: int) -> str:
+    """Create a short-lived (5-minute) pre-auth JWT for the 2FA verification step."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    return jwt.encode(
+        {"sub": str(user_id), "type": "pre_auth", "exp": expire},
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+
 def create_password_reset_token(user_id: int, hashed_password: str) -> str:
     """Create a 15-minute password-reset JWT.
 

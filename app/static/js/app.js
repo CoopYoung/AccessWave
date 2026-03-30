@@ -414,6 +414,7 @@ function openModal(overlay) {
 function initAuth(type) {
     if (API.isLoggedIn()) { window.location.href = '/dashboard'; return; }
     const form = document.getElementById('auth-form');
+    const totpForm = document.getElementById('totp-form');
     const globalErr = document.getElementById('error-msg');
     if (!form) return;
 
@@ -427,6 +428,43 @@ function initAuth(type) {
         passwordInput?.addEventListener('blur', () => { if (passwordInput.value) validatePasswordField(passwordInput); });
         passwordInput?.addEventListener('focus', () => clearFieldError(passwordInput));
     }
+
+    // "Back" button in TOTP step returns to the password step
+    document.getElementById('totp-back-btn')?.addEventListener('click', () => {
+        if (totpForm) totpForm.hidden = true;
+        form.hidden = false;
+        globalErr.style.display = 'none';
+        document.getElementById('totp-code').value = '';
+    });
+
+    // TOTP step 2 form submission
+    totpForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        globalErr.style.display = 'none';
+        const code = document.getElementById('totp-code').value.trim();
+        if (!code) return;
+        const btn = totpForm.querySelector('button[type=submit]');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Verifying\u2026';
+        try {
+            const preToken = totpForm.dataset.preAuthToken;
+            const r = await fetch('/api/auth/login/totp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pre_auth_token: preToken, totp_code: code }),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.detail || 'Verification failed');
+            API.setToken(data.access_token);
+            window.location.href = '/dashboard';
+        } catch (err) {
+            globalErr.textContent = err.message;
+            globalErr.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -452,6 +490,18 @@ function initAuth(type) {
                 const r = await fetch('/api/auth/login', { method: 'POST', body: fd });
                 data = await r.json();
                 if (!r.ok) throw new Error(data.detail || 'Login failed');
+                // If 2FA is required, show the TOTP step
+                if (data.requires_totp) {
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                    form.hidden = true;
+                    if (totpForm) {
+                        totpForm.dataset.preAuthToken = data.pre_auth_token;
+                        totpForm.hidden = false;
+                        document.getElementById('totp-code')?.focus();
+                    }
+                    return;
+                }
             }
             API.setToken(data.access_token); window.location.href = '/dashboard';
         } catch (err) {
@@ -1809,7 +1859,145 @@ async function initSettings() {
 
     await loadProfile();
     await loadNotificationPrefs();
+    init2FASettings();
     initAuditLog();
+}
+
+// ── Two-Factor Authentication settings ───────────────────────────────────────
+
+function show2FABanner(msg, isError = false) {
+    const el = document.getElementById('2fa-banner');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'settings-banner' + (isError ? ' settings-banner--error' : ' settings-banner--success');
+    el.hidden = false;
+    setTimeout(() => { el.hidden = true; }, 5000);
+}
+
+function set2FAState(enabled) {
+    const badge = document.getElementById('2fa-status-badge');
+    const disabledPanel = document.getElementById('2fa-disabled-panel');
+    const enabledPanel = document.getElementById('2fa-enabled-panel');
+    const setupPanel = document.getElementById('2fa-setup-panel');
+    if (badge) {
+        badge.textContent = enabled ? '2FA On' : '2FA Off';
+        badge.className = 'badge ' + (enabled ? 'badge-success' : 'badge-muted');
+    }
+    if (disabledPanel) disabledPanel.hidden = enabled;
+    if (enabledPanel) enabledPanel.hidden = !enabled;
+    if (setupPanel) setupPanel.hidden = true;
+}
+
+async function init2FASettings() {
+    try {
+        const data = await API.req('GET', '/auth/2fa/status');
+        set2FAState(data.totp_enabled);
+    } catch {
+        set2FAState(false);
+    }
+
+    document.getElementById('start-2fa-setup-btn')?.addEventListener('click', async () => {
+        const setupPanel = document.getElementById('2fa-setup-panel');
+        const disabledPanel = document.getElementById('2fa-disabled-panel');
+        try {
+            const data = await API.req('GET', '/auth/2fa/setup');
+            const keyEl = document.getElementById('2fa-manual-key');
+            if (keyEl) keyEl.textContent = data.secret;
+            // Build QR code URL using qrserver.com (no CDN required, privacy-friendly)
+            const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' +
+                encodeURIComponent(data.provisioning_uri);
+            const qrImg = document.getElementById('2fa-qr-img');
+            if (qrImg) { qrImg.src = qrUrl; qrImg.alt = 'QR code for two-factor authentication setup'; }
+            if (disabledPanel) disabledPanel.hidden = true;
+            if (setupPanel) setupPanel.hidden = false;
+            document.getElementById('2fa-confirm-code')?.focus();
+        } catch (err) {
+            show2FABanner(err.message || 'Failed to start 2FA setup', true);
+        }
+    });
+
+    document.getElementById('copy-2fa-key-btn')?.addEventListener('click', async () => {
+        const key = document.getElementById('2fa-manual-key')?.textContent?.trim();
+        if (!key || key === '—') return;
+        try {
+            await navigator.clipboard.writeText(key);
+            showToast('Key copied to clipboard');
+        } catch {
+            showToast('Copy failed — select the key manually');
+        }
+    });
+
+    document.getElementById('cancel-2fa-setup-btn')?.addEventListener('click', () => {
+        document.getElementById('2fa-setup-panel').hidden = true;
+        document.getElementById('2fa-disabled-panel').hidden = false;
+    });
+
+    document.getElementById('2fa-enable-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = document.getElementById('2fa-confirm-code')?.value?.trim();
+        if (!code) return;
+        const btn = e.target.querySelector('button[type=submit]');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Enabling\u2026';
+        try {
+            await API.req('POST', '/auth/2fa/enable', { totp_code: code });
+            set2FAState(true);
+            show2FABanner('Two-factor authentication enabled successfully.');
+            document.getElementById('2fa-confirm-code').value = '';
+        } catch (err) {
+            show2FABanner(err.message || 'Invalid code — please try again', true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
+
+    // Disable 2FA modal
+    document.getElementById('open-disable-2fa-modal-btn')?.addEventListener('click', () => {
+        const modal = document.getElementById('disable-2fa-modal');
+        if (modal) { modal.hidden = false; modal.removeAttribute('hidden'); }
+        document.getElementById('disable-2fa-password')?.focus();
+    });
+
+    const closeDisable2FAModal = () => {
+        const modal = document.getElementById('disable-2fa-modal');
+        if (modal) modal.hidden = true;
+        document.getElementById('disable-2fa-password').value = '';
+        const banner = document.getElementById('disable-2fa-banner');
+        if (banner) banner.hidden = true;
+    };
+
+    document.getElementById('close-disable-2fa-modal-btn')?.addEventListener('click', closeDisable2FAModal);
+    document.getElementById('disable-2fa-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('disable-2fa-modal')) closeDisable2FAModal();
+    });
+
+    document.getElementById('disable-2fa-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = document.getElementById('disable-2fa-password')?.value;
+        if (!password) return;
+        const btn = e.target.querySelector('button[type=submit]');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Disabling\u2026';
+        const banner = document.getElementById('disable-2fa-banner');
+        try {
+            await API.req('DELETE', '/auth/2fa/disable', { password });
+            closeDisable2FAModal();
+            set2FAState(false);
+            show2FABanner('Two-factor authentication has been disabled.');
+        } catch (err) {
+            if (banner) {
+                banner.textContent = err.message || 'Failed to disable 2FA';
+                banner.className = 'settings-banner settings-banner--error';
+                banner.hidden = false;
+            }
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
 }
 
 async function exportData() {
