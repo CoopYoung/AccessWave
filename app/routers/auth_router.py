@@ -165,14 +165,47 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == form.username))
     user = result.scalar_one_or_none()
+
+    # Check if account is currently locked
+    now = datetime.datetime.utcnow()
+    if user and user.locked_until and user.locked_until > now:
+        remaining = int((user.locked_until - now).total_seconds() // 60) + 1
+        logger.warning("login_account_locked", user_id=user.id, locked_until=str(user.locked_until))
+        AUTH_ATTEMPTS.labels(endpoint="login", outcome="locked").inc()
+        raise HTTPException(
+            status_code=429,
+            detail=f"Account locked due to too many failed attempts. Try again in {remaining} minute(s).",
+        )
+
     if not user or not verify_password(form.password, user.hashed_password):
         logger.warning("login_failed", email=form.username)
         AUTH_ATTEMPTS.labels(endpoint="login", outcome="failure").inc()
         uid = user.id if user else None
-        await log_action(db, action="login.failure", user_id=uid, request=request,
-                         extra={"email": form.username})
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+                user.locked_until = now + datetime.timedelta(minutes=settings.LOCKOUT_MINUTES)
+                logger.warning(
+                    "login_account_locked_now",
+                    user_id=user.id,
+                    attempts=user.failed_login_attempts,
+                    locked_until=str(user.locked_until),
+                )
+                await log_action(db, action="login.account_locked", user_id=uid, request=request,
+                                 extra={"email": form.username, "attempts": user.failed_login_attempts})
+            else:
+                await log_action(db, action="login.failure", user_id=uid, request=request,
+                                 extra={"email": form.username, "attempts": user.failed_login_attempts})
+        else:
+            await log_action(db, action="login.failure", user_id=None, request=request,
+                             extra={"email": form.username})
         await db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Successful password check — reset lockout counters
+    if user.failed_login_attempts or user.locked_until:
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
     # If 2FA is enabled, issue a pre-auth token instead of a full JWT
     if user.totp_enabled and user.totp_secret:

@@ -24,6 +24,9 @@ class User(Base):
     # TOTP-based two-factor authentication
     totp_secret = Column(String(64), nullable=True)    # base32 TOTP secret
     totp_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    # Account lockout after repeated failed logins
+    failed_login_attempts = Column(Integer, default=0, nullable=False, server_default="0")
+    locked_until = Column(DateTime, nullable=True)
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")

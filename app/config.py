@@ -77,6 +77,10 @@ class Settings:
     HSTS_ENABLED: bool = os.getenv("HSTS_ENABLED", "false").lower() == "true"
     # Optional URI for CSP violation reports (leave blank to omit the directive).
     CSP_REPORT_URI: str = os.getenv("CSP_REPORT_URI", "")
+    # Account lockout after repeated failed logins
+    MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
+    LOCKOUT_MINUTES: int = int(os.getenv("LOCKOUT_MINUTES", "15"))
+
     # Celery task queue
     # Set USE_CELERY=true and configure the URLs below to enable distributed scanning.
     # When disabled (default) scans run in FastAPI background tasks (single-process only).
