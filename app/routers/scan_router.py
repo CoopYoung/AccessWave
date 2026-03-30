@@ -385,6 +385,8 @@ async def list_scans(
     max_score: float | None = Query(default=None, ge=0, le=100),
     sort: str = Query(default="created_at", pattern="^(created_at|score|total_issues)$"),
     order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    from_date: datetime.datetime | None = Query(default=None, description="Filter scans created on or after this UTC datetime (ISO 8601)"),
+    to_date: datetime.datetime | None = Query(default=None, description="Filter scans created on or before this UTC datetime (ISO 8601)"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -396,6 +398,12 @@ async def list_scans(
         query = query.where(Scan.score >= min_score)
     if max_score is not None:
         query = query.where(Scan.score <= max_score)
+    if from_date is not None:
+        query = query.where(Scan.created_at >= from_date)
+    if to_date is not None:
+        # Include the entire to_date day by extending to end of day
+        end_of_day = to_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        query = query.where(Scan.created_at <= end_of_day)
     sort_col = getattr(Scan, sort)
     order_expr = sort_col.desc() if order == "desc" else sort_col.asc()
     result = await db.execute(query.order_by(nullslast(order_expr)).offset(offset).limit(limit))

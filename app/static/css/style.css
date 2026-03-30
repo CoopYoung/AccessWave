@@ -192,6 +192,8 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 .filter-group select, .filter-input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.88rem; height: 34px; font-family: inherit; }
 .filter-group select:focus, .filter-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
 .filter-actions { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 1px; }
+.filter-date-custom { min-width: 130px; }
+.filter-date-custom input[type="date"] { padding: 5px 8px; height: 34px; }
 
 /* Scan count label */
 .scan-count-label { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 10px; min-height: 1.2em; }

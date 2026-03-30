@@ -525,7 +525,7 @@ let closeAddModal = null;
 let closeShortcutsModal = null;
 
 // Scan filter & pagination state
-let scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
+let scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc', date_preset: '', from_date: '', to_date: '' };
 let scanPage = 0;
 const SCAN_PAGE_SIZE = 10;
 let selectedSites = new Set();
@@ -976,6 +976,26 @@ async function openSite(siteId) {
                             <option value="asc">Oldest first</option>
                         </select>
                     </div>
+                    <div class="filter-group">
+                        <label for="filter-date-preset">Date range</label>
+                        <select id="filter-date-preset" onchange="onDatePresetChange(this.value)">
+                            <option value="">All time</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="custom">Custom range</option>
+                        </select>
+                    </div>
+                    <div class="filter-group filter-date-custom" id="filter-date-custom" hidden>
+                        <label for="filter-from-date">From</label>
+                        <input type="date" id="filter-from-date" class="filter-input"
+                            oninput="scanFilters.from_date=this.value" aria-label="From date">
+                    </div>
+                    <div class="filter-group filter-date-custom" id="filter-date-to" hidden>
+                        <label for="filter-to-date">To</label>
+                        <input type="date" id="filter-to-date" class="filter-input"
+                            oninput="scanFilters.to_date=this.value" aria-label="To date">
+                    </div>
                     <div class="filter-actions">
                         <button class="btn btn-sm btn-primary" onclick="applyScanFilters()">Apply</button>
                         <button class="btn btn-sm btn-outline" onclick="resetScanFilters()">Reset</button>
@@ -992,11 +1012,29 @@ async function openSite(siteId) {
     }
 }
 
+function onDatePresetChange(val) {
+    scanFilters.date_preset = val;
+    const customFrom = document.getElementById('filter-date-custom');
+    const customTo = document.getElementById('filter-date-to');
+    if (val === 'custom') {
+        if (customFrom) customFrom.hidden = false;
+        if (customTo) customTo.hidden = false;
+    } else {
+        if (customFrom) customFrom.hidden = true;
+        if (customTo) customTo.hidden = true;
+        scanFilters.from_date = '';
+        scanFilters.to_date = '';
+        if (document.getElementById('filter-from-date')) document.getElementById('filter-from-date').value = '';
+        if (document.getElementById('filter-to-date')) document.getElementById('filter-to-date').value = '';
+    }
+}
+
 function _updateFilterBadge() {
     const badge = document.getElementById('filter-badge');
     if (!badge) return;
     const active = scanFilters.status || scanFilters.min_score !== '' || scanFilters.max_score !== '' ||
-        scanFilters.sort !== 'created_at' || scanFilters.order !== 'desc';
+        scanFilters.sort !== 'created_at' || scanFilters.order !== 'desc' ||
+        scanFilters.date_preset !== '';
     badge.hidden = !active;
 }
 
@@ -1007,7 +1045,7 @@ async function applyScanFilters() {
 }
 
 async function resetScanFilters() {
-    scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc' };
+    scanFilters = { status: '', min_score: '', max_score: '', sort: 'created_at', order: 'desc', date_preset: '', from_date: '', to_date: '' };
     scanPage = 0;
     const g = (id) => document.getElementById(id);
     if (g('filter-status')) g('filter-status').value = '';
@@ -1015,6 +1053,11 @@ async function resetScanFilters() {
     if (g('filter-max-score')) g('filter-max-score').value = '';
     if (g('filter-sort')) g('filter-sort').value = 'created_at';
     if (g('filter-order')) g('filter-order').value = 'desc';
+    if (g('filter-date-preset')) g('filter-date-preset').value = '';
+    if (g('filter-from-date')) g('filter-from-date').value = '';
+    if (g('filter-to-date')) g('filter-to-date').value = '';
+    if (g('filter-date-custom')) g('filter-date-custom').hidden = true;
+    if (g('filter-date-to')) g('filter-date-to').hidden = true;
     _updateFilterBadge();
     await _renderScans(currentSiteId);
 }
@@ -1031,6 +1074,16 @@ async function _renderScans(siteId) {
     if (scanFilters.max_score !== '') params.set('max_score', scanFilters.max_score);
     if (scanFilters.sort) params.set('sort', scanFilters.sort);
     if (scanFilters.order) params.set('order', scanFilters.order);
+    // Date range: resolve preset to ISO dates
+    if (scanFilters.date_preset && scanFilters.date_preset !== 'custom') {
+        const days = parseInt(scanFilters.date_preset, 10);
+        const from = new Date();
+        from.setDate(from.getDate() - days);
+        params.set('from_date', from.toISOString().slice(0, 10));
+    } else if (scanFilters.date_preset === 'custom') {
+        if (scanFilters.from_date) params.set('from_date', scanFilters.from_date);
+        if (scanFilters.to_date) params.set('to_date', scanFilters.to_date);
+    }
     try {
         const scans = await API.req('GET', `/sites/${siteId}/scans?${params}`);
         if (!scans) return;
