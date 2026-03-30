@@ -9,12 +9,13 @@ import datetime
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import func, select
+from sqlalchemy import delete as sql_delete, func, select
 
 from app.config import settings
 from app.database import async_session
-from app.models import Scan, Site, User
+from app.models import AuditLog, Issue, Scan, Site, User
 from app.services.scan_runner import run_scan
 
 logger = logging.getLogger("accesswave.scheduler")
@@ -91,6 +92,53 @@ async def _dispatch_scheduled_scans() -> None:
             asyncio.create_task(run_scan(scan.id, max_pages=max_pages))
 
 
+async def _cleanup_old_data() -> None:
+    """Delete scans and audit logs that exceed the configured retention period."""
+    now = datetime.datetime.utcnow()
+    deleted_scans = 0
+    deleted_issues = 0
+    deleted_audit = 0
+
+    async with async_session() as db:
+        if settings.DATA_RETENTION_DAYS > 0:
+            cutoff = now - datetime.timedelta(days=settings.DATA_RETENTION_DAYS)
+            # Collect IDs of old completed/failed scans
+            result = await db.execute(
+                select(Scan.id).where(
+                    Scan.created_at < cutoff,
+                    Scan.status.in_(["completed", "failed"]),
+                )
+            )
+            old_scan_ids = [row[0] for row in result.fetchall()]
+            if old_scan_ids:
+                # Delete issues first (no DB-level cascade)
+                res = await db.execute(
+                    sql_delete(Issue).where(Issue.scan_id.in_(old_scan_ids))
+                )
+                deleted_issues = res.rowcount
+                res = await db.execute(
+                    sql_delete(Scan).where(Scan.id.in_(old_scan_ids))
+                )
+                deleted_scans = res.rowcount
+
+        if settings.AUDIT_LOG_RETENTION_DAYS > 0:
+            audit_cutoff = now - datetime.timedelta(days=settings.AUDIT_LOG_RETENTION_DAYS)
+            res = await db.execute(
+                sql_delete(AuditLog).where(AuditLog.created_at < audit_cutoff)
+            )
+            deleted_audit = res.rowcount
+
+        if deleted_scans or deleted_audit:
+            await db.commit()
+
+    logger.info(
+        "data_cleanup_complete deleted_scans=%d deleted_issues=%d deleted_audit_logs=%d",
+        deleted_scans,
+        deleted_issues,
+        deleted_audit,
+    )
+
+
 def start_scheduler() -> None:
     """Register the polling job and start the scheduler."""
     scheduler.add_job(
@@ -100,8 +148,20 @@ def start_scheduler() -> None:
         replace_existing=True,
         misfire_grace_time=60,
     )
+    # Run data retention cleanup daily at 03:00 UTC
+    scheduler.add_job(
+        _cleanup_old_data,
+        trigger=CronTrigger(hour=3, minute=0, timezone="UTC"),
+        id="cleanup_old_data",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     scheduler.start()
-    logger.info("scheduler_started poll_interval=5m")
+    logger.info(
+        "scheduler_started poll_interval=5m data_retention_days=%d audit_retention_days=%d",
+        settings.DATA_RETENTION_DAYS,
+        settings.AUDIT_LOG_RETENTION_DAYS,
+    )
 
 
 def stop_scheduler() -> None:

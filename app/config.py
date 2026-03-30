@@ -81,6 +81,10 @@ class Settings:
     MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOCKOUT_MINUTES: int = int(os.getenv("LOCKOUT_MINUTES", "15"))
 
+    # Data retention — set to 0 to keep data indefinitely
+    DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "90"))
+    AUDIT_LOG_RETENTION_DAYS: int = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "365"))
+
     # Celery task queue
     # Set USE_CELERY=true and configure the URLs below to enable distributed scanning.
     # When disabled (default) scans run in FastAPI background tasks (single-process only).

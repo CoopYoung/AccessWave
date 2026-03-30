@@ -2115,9 +2115,8 @@ async function exportData() {
     btn.disabled = true;
     if (status) status.textContent = 'Preparing export\u2026';
     try {
-        const token = localStorage.getItem('token');
         const resp = await fetch('/api/backup/export', {
-            headers: { Authorization: 'Bearer ' + token },
+            headers: API.headers(),
         });
         if (!resp.ok) throw new Error('Export failed (' + resp.status + ')');
         const blob = await resp.blob();
@@ -2148,12 +2147,11 @@ async function importData() {
     btn.disabled = true;
     if (statusEl) statusEl.textContent = 'Importing\u2026';
     try {
-        const token = localStorage.getItem('token');
         const formData = new FormData();
         formData.append('file', file);
         const resp = await fetch('/api/backup/import', {
             method: 'POST',
-            headers: { Authorization: 'Bearer ' + token },
+            headers: API.headers(),
             body: formData,
         });
         const data = await resp.json();
@@ -2983,11 +2981,10 @@ function _auditTimeLabel(iso) {
 }
 
 async function _fetchAuditLogs(offset) {
-    const token = localStorage.getItem('token');
     const params = new URLSearchParams({ limit: _AUDIT_PAGE_SIZE + 1, offset });
     if (_auditFilter) params.set('action', _auditFilter);
     const resp = await fetch('/api/audit?' + params, {
-        headers: { Authorization: 'Bearer ' + token },
+        headers: API.headers(),
     });
     if (!resp.ok) throw new Error('Failed to load audit log');
     return resp.json();
