@@ -1521,15 +1521,39 @@ async function openScan(scanId) {
                 </button>
             </div>
             <div class="issues-header">
-                <h3>Issues (${issues.length})</h3>
+                <h3>Issues (<span id="issues-count-label">${issues.length}</span>)</h3>
                 ${issues.length ? `<button class="btn btn-sm btn-outline" onclick="expandAllIssues()">Expand All</button>` : ''}
             </div>
-            ${issues.length
-                ? `<div class="issues-list" role="list">${SEVERITIES.map(severityGroup).join('')}</div>`
+            ${issues.length ? (() => {
+                const pageUrls = [...new Set(issues.map(i => i.page_url))].sort();
+                const pageOptions = pageUrls.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+                return `<div class="issue-search-bar" role="search" aria-label="Filter issues">
+                    <div class="issue-search-field">
+                        <label for="issue-search-input" class="sr-only">Search issues</label>
+                        <input type="search" id="issue-search-input" class="issue-search-input"
+                            placeholder="Search by rule, message, WCAG criteria&hellip;"
+                            aria-label="Search issues by rule ID, message, or WCAG criteria"
+                            oninput="renderFilteredIssues()">
+                    </div>
+                    <div class="issue-search-field">
+                        <label for="issue-page-filter" class="sr-only">Filter by page</label>
+                        <select id="issue-page-filter" class="issue-page-select"
+                            aria-label="Filter issues by page URL"
+                            onchange="renderFilteredIssues()">
+                            <option value="">All pages (${pageUrls.length})</option>
+                            ${pageOptions}
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-ghost" id="issue-search-clear" onclick="clearIssueSearch()" hidden
+                        aria-label="Clear issue search and filters">Clear</button>
+                </div>
+                <p id="issue-search-status" role="status" aria-live="polite" class="issue-search-status"></p>
+                <div class="issues-list" id="issues-list-container" role="list"></div>`;
+            })()
                 : `<p style="color:var(--text-muted)">No issues found &mdash; great job!</p>`}`;
 
-        if (issues.length && window.hljs) {
-            el.querySelectorAll('.issue-code code').forEach(b => hljs.highlightElement(b));
+        if (issues.length) {
+            renderFilteredIssues();
         }
         animateGauges(el);
     } catch (e) { console.error(e); }
@@ -1552,6 +1576,90 @@ function toggleSection(btn) {
 function expandAllIssues() {
     document.querySelectorAll('.issue-group-header[aria-expanded="false"]').forEach(toggleGroup);
     document.querySelectorAll('.issue-toggle[aria-expanded="false"]').forEach(toggleSection);
+}
+
+function renderFilteredIssues() {
+    const container = document.getElementById('issues-list-container');
+    if (!container) return;
+    const q = (document.getElementById('issue-search-input')?.value || '').toLowerCase().trim();
+    const pageFilter = document.getElementById('issue-page-filter')?.value || '';
+    const clearBtn = document.getElementById('issue-search-clear');
+    const statusEl = document.getElementById('issue-search-status');
+    const countLabel = document.getElementById('issues-count-label');
+    const hasFilter = q || pageFilter;
+    if (clearBtn) clearBtn.hidden = !hasFilter;
+
+    const SEVERITIES = ['critical', 'serious', 'moderate', 'minor'];
+    const filtered = currentIssues.filter(i => {
+        if (pageFilter && i.page_url !== pageFilter) return false;
+        if (!q) return true;
+        return (i.rule_id || '').toLowerCase().includes(q) ||
+               (i.message || '').toLowerCase().includes(q) ||
+               (i.wcag_criteria || '').toLowerCase().includes(q) ||
+               (i.page_url || '').toLowerCase().includes(q) ||
+               (i.selector || '').toLowerCase().includes(q);
+    });
+
+    const grouped = { critical: [], serious: [], moderate: [], minor: [] };
+    filtered.forEach(i => { (grouped[i.severity] ?? grouped.minor).push(i); });
+
+    if (countLabel) countLabel.textContent = hasFilter ? `${filtered.length} of ${currentIssues.length}` : String(currentIssues.length);
+    if (statusEl) {
+        statusEl.textContent = hasFilter
+            ? (filtered.length ? `Showing ${filtered.length} issue${filtered.length !== 1 ? 's' : ''} matching your filter` : 'No issues match your filter')
+            : '';
+    }
+
+    container.innerHTML = filtered.length
+        ? SEVERITIES.map(sev => {
+            const grp = grouped[sev];
+            if (!grp.length) return '';
+            const gid = `grp-${sev}-filtered`;
+            const n = grp.length;
+            const label = sev[0].toUpperCase() + sev.slice(1);
+            return `<div class="issue-group">
+                <button class="issue-group-header ${sev}" aria-expanded="true" aria-controls="${gid}" onclick="toggleGroup(this)">
+                    <span class="group-title">${label}</span>
+                    <span class="group-count">${n} ${n === 1 ? 'issue' : 'issues'}</span>
+                    <span class="group-toggle" aria-hidden="true">&#9660;</span>
+                </button>
+                <div id="${gid}" class="issue-group-body">${grp.map(i => {
+                    const uid = `i${i.id}f`;
+                    const hasCode = !!i.element_html;
+                    const hasFix = !!i.how_to_fix;
+                    return `<div class="issue-card ${esc(i.severity)}">
+                        <div class="issue-header">
+                            <span class="badge badge-${esc(i.severity)}">${esc(i.severity)}</span>
+                            ${i.wcag_criteria ? `<span class="wcag">WCAG ${esc(i.wcag_criteria)}</span>` : ''}
+                            <code class="issue-rule-id">${esc(i.rule_id)}</code>
+                        </div>
+                        <p class="issue-message">${esc(i.message)}</p>
+                        <p class="issue-page-url">${esc(i.page_url)}</p>
+                        ${i.selector ? `<code class="issue-selector" title="${esc(i.selector)}">${esc(i.selector)}</code>` : ''}
+                        ${hasCode || hasFix ? `<div class="issue-actions">
+                            ${hasCode ? `<button class="issue-toggle" aria-expanded="false" aria-controls="${uid}-code" onclick="toggleSection(this)"><span class="toggle-icon" aria-hidden="true">&#9660;</span> HTML snippet</button>` : ''}
+                            ${hasFix ? `<button class="issue-toggle" aria-expanded="false" aria-controls="${uid}-fix" onclick="toggleSection(this)"><span class="toggle-icon" aria-hidden="true">&#9660;</span> How to fix</button>` : ''}
+                        </div>` : ''}
+                        ${hasCode ? `<div id="${uid}-code" class="issue-section" hidden><div class="issue-code"><code class="language-html">${esc(i.element_html)}</code></div></div>` : ''}
+                        ${hasFix ? `<div id="${uid}-fix" class="issue-section" hidden><div class="issue-fix">${esc(i.how_to_fix)}</div></div>` : ''}
+                    </div>`;
+                }).join('')}</div>
+            </div>`;
+        }).join('')
+        : `<p class="issues-empty-msg">${hasFilter ? 'No issues match your filter.' : 'No issues found.'}</p>`;
+
+    if (window.hljs) {
+        container.querySelectorAll('.issue-code code').forEach(b => hljs.highlightElement(b));
+    }
+}
+
+function clearIssueSearch() {
+    const inp = document.getElementById('issue-search-input');
+    const sel = document.getElementById('issue-page-filter');
+    if (inp) inp.value = '';
+    if (sel) sel.value = '';
+    renderFilteredIssues();
+    inp?.focus();
 }
 
 function exportCSV() {
