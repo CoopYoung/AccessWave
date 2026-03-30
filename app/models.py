@@ -35,12 +35,12 @@ class User(Base):
 class Site(Base):
     __tablename__ = "sites"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     url = Column(String(2048), nullable=False)
     name = Column(String(255), nullable=False)
     # Scheduled scanning: none | daily | weekly | monthly
     schedule = Column(String(20), default="none", nullable=False)
-    next_scan_at = Column(DateTime, nullable=True)
+    next_scan_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     owner = relationship("User", back_populates="sites")
     scans = relationship("Scan", back_populates="site", cascade="all, delete-orphan")
@@ -49,8 +49,8 @@ class Site(Base):
 class Scan(Base):
     __tablename__ = "scans"
     id = Column(Integer, primary_key=True, index=True)
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
-    status = Column(String(20), default="pending")  # pending, running, completed, failed
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    status = Column(String(20), default="pending", index=True)  # pending, running, completed, failed
     pages_scanned = Column(Integer, default=0)
     total_issues = Column(Integer, default=0)
     critical_count = Column(Integer, default=0)
@@ -60,7 +60,7 @@ class Scan(Base):
     score = Column(Float, nullable=True)  # 0-100 accessibility score
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     share_token = Column(String(36), nullable=True, unique=True, index=True)  # UUID for public share links
     cancellation_requested = Column(Boolean, default=False, nullable=False, server_default="0")
     site = relationship("Site", back_populates="scans")
@@ -70,10 +70,10 @@ class Scan(Base):
 class Issue(Base):
     __tablename__ = "issues"
     id = Column(Integer, primary_key=True, index=True)
-    scan_id = Column(Integer, ForeignKey("scans.id"), nullable=False)
+    scan_id = Column(Integer, ForeignKey("scans.id"), nullable=False, index=True)
     page_url = Column(String(2048), nullable=False)
     rule_id = Column(String(50), nullable=False)
-    severity = Column(String(20), nullable=False)  # critical, serious, moderate, minor
+    severity = Column(String(20), nullable=False, index=True)  # critical, serious, moderate, minor
     wcag_criteria = Column(String(20), nullable=True)  # e.g. "1.1.1", "4.1.2"
     message = Column(Text, nullable=False)
     element_html = Column(Text, nullable=True)
@@ -85,7 +85,7 @@ class Issue(Base):
 class Webhook(Base):
     __tablename__ = "webhooks"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     url = Column(String(2048), nullable=False)
     # HMAC-SHA256 signing secret — shown once at creation, stored in plaintext
     # so users can verify incoming payloads on their servers.
@@ -100,7 +100,7 @@ class Webhook(Base):
 class ApiKey(Base):
     __tablename__ = "api_keys"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     # First 11 chars of the raw key (e.g. "aw_abc12345") shown in UI after creation
     key_prefix = Column(String(12), nullable=False)
