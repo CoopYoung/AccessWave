@@ -561,10 +561,17 @@ function renderSitesToolbar(count) {
         ['created',     'Recently added'],
     ];
     const opts = sorts.map(([v, l]) => `<option value="${v}"${siteSortMode === v ? ' selected' : ''}>${l}</option>`).join('');
+    const allChecked = count > 0 && selectedSites.size === count;
+    const someChecked = selectedSites.size > 0 && selectedSites.size < count;
     return `
         <div class="sites-toolbar" role="toolbar" aria-label="Sites view controls">
             <div class="toolbar-left">
-                <span class="site-count">${count} site${count !== 1 ? 's' : ''}</span>
+                <label class="select-all-label" title="Select all sites">
+                    <input type="checkbox" id="select-all-check" aria-label="Select all sites"
+                           ${allChecked ? 'checked' : ''} onchange="toggleSelectAll(this)">
+                    <span class="site-count">${count} site${count !== 1 ? 's' : ''}</span>
+                </label>
+                <span id="selection-info" class="selection-info" aria-live="polite">${selectedSites.size > 0 ? selectedSites.size + ' selected' : ''}</span>
                 <select class="sort-select" id="sort-select" aria-label="Sort sites by" onchange="setSortMode(this.value)">${opts}</select>
             </div>
             <div class="view-toggle" role="group" aria-label="Switch view layout">
@@ -582,9 +589,15 @@ function siteCardHtml(s) {
     const ring = s.last_score !== null
         ? `<div class="score-ring ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
         : `<div class="score-ring score-unscanned">--</div>`;
+    const isSelected = selectedSites.has(s.id);
     return `
-        <div class="site-card" onclick="openSite(${s.id})" tabindex="0" role="button"
+        <div class="site-card${isSelected ? ' selected' : ''}" data-site-id="${s.id}"
+             onclick="openSite(${s.id})" tabindex="0" role="button"
              aria-label="Open ${esc(s.name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
+            <div class="site-check-wrap" onclick="event.stopPropagation()">
+                <input type="checkbox" class="site-check" aria-label="Select ${esc(s.name)}"${isSelected ? ' checked' : ''}
+                       onchange="toggleSiteSelect(${s.id}, this)">
+            </div>
             <div class="site-info">
                 ${ring}
                 <div><div class="name">${esc(s.name)}</div><div class="url">${esc(s.url)}</div></div>
@@ -606,9 +619,15 @@ function renderSiteList(sites) {
         const ring = s.last_score !== null
             ? `<div class="score-ring score-ring-sm ${scoreClass(s.last_score)}">${s.last_score.toFixed(0)}</div>`
             : `<div class="score-ring score-ring-sm score-unscanned">--</div>`;
+        const isSelected = selectedSites.has(s.id);
         return `
-            <div class="site-row" onclick="openSite(${s.id})" tabindex="0" role="listitem"
+            <div class="site-row${isSelected ? ' selected' : ''}" data-site-id="${s.id}"
+                 onclick="openSite(${s.id})" tabindex="0" role="listitem"
                  aria-label="${esc(s.name)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(${s.id})}">
+                <div class="site-check-wrap" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="site-check" aria-label="Select ${esc(s.name)}"${isSelected ? ' checked' : ''}
+                           onchange="toggleSiteSelect(${s.id}, this)">
+                </div>
                 ${ring}
                 <div>
                     <div class="row-name">${esc(s.name)}</div>
@@ -623,7 +642,7 @@ function renderSiteList(sites) {
     }).join('');
     return `<div class="sites-list-compact" role="list">
         <div class="site-row-header" aria-hidden="true">
-            <span></span><span>Site</span><span>Last scanned</span><span>Actions</span>
+            <span></span><span></span><span>Site</span><span>Last scanned</span><span>Actions</span>
         </div>
         ${rows}
     </div>`;
@@ -638,6 +657,8 @@ function renderSites() {
     }
     const sorted = sortSites(sitesData, siteSortMode);
     el.innerHTML = renderSitesToolbar(sorted.length) + (siteViewMode === 'list' ? renderSiteList(sorted) : renderSiteGrid(sorted));
+    // Restore indeterminate state on newly-rendered select-all checkbox
+    _syncSelectAll();
 }
 
 function setViewMode(mode) {
@@ -834,19 +855,20 @@ async function loadSites() {
 function toggleSiteSelect(siteId, checkbox) {
     if (checkbox.checked) selectedSites.add(siteId);
     else selectedSites.delete(siteId);
-    const card = document.querySelector(`.site-card[data-site-id="${siteId}"]`);
-    if (card) card.classList.toggle('selected', checkbox.checked);
+    const row = document.querySelector(`[data-site-id="${siteId}"]`);
+    if (row) row.classList.toggle('selected', checkbox.checked);
     _syncSelectAll();
     updateBulkToolbar();
 }
 
 function toggleSelectAll(checkbox) {
     document.querySelectorAll('.site-check').forEach(ch => {
-        const id = parseInt(ch.closest('.site-card').dataset.siteId);
+        const row = ch.closest('[data-site-id]');
+        if (!row) return;
+        const id = parseInt(row.dataset.siteId);
         ch.checked = checkbox.checked;
-        const card = ch.closest('.site-card');
-        if (checkbox.checked) { selectedSites.add(id); card.classList.add('selected'); }
-        else { selectedSites.delete(id); card.classList.remove('selected'); }
+        if (checkbox.checked) { selectedSites.add(id); row.classList.add('selected'); }
+        else { selectedSites.delete(id); row.classList.remove('selected'); }
     });
     updateBulkToolbar();
 }
