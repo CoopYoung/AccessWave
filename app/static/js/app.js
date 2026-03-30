@@ -1789,7 +1789,80 @@ async function initSettings() {
     document.getElementById('profile-form')?.addEventListener('submit', saveProfile);
     document.getElementById('password-form')?.addEventListener('submit', changePassword);
     document.getElementById('delete-form')?.addEventListener('submit', deleteAccount);
+
+    // Data management
+    document.getElementById('export-btn')?.addEventListener('click', exportData);
+    const importFile = document.getElementById('import-file');
+    const importBtn = document.getElementById('import-btn');
+    importFile?.addEventListener('change', () => {
+        if (importBtn) importBtn.disabled = !importFile.files.length;
+    });
+    importBtn?.addEventListener('click', importData);
+
     await loadProfile();
+}
+
+async function exportData() {
+    const btn = document.getElementById('export-btn');
+    const status = document.getElementById('export-status');
+    btn.disabled = true;
+    if (status) status.textContent = 'Preparing export\u2026';
+    try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch('/api/backup/export', {
+            headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!resp.ok) throw new Error('Export failed (' + resp.status + ')');
+        const blob = await resp.blob();
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : 'accesswave-backup.json';
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        if (status) status.textContent = 'Download started.';
+        showToast('Data exported');
+    } catch (err) {
+        if (status) status.textContent = err.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function importData() {
+    const btn = document.getElementById('import-btn');
+    const statusEl = document.getElementById('import-status');
+    const fileInput = document.getElementById('import-file');
+    const file = fileInput.files[0];
+    if (!file) return;
+    btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Importing\u2026';
+    try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('file', file);
+        const resp = await fetch('/api/backup/import', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token },
+            body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Import failed');
+        const msg = 'Import complete \u2014 ' + data.sites_created + ' site(s) added, ' + data.scans_created + ' scan(s) added' +
+            (data.sites_skipped || data.scans_skipped
+                ? ' (' + data.sites_skipped + ' site(s) and ' + data.scans_skipped + ' scan(s) already existed)'
+                : '') + '.';
+        if (statusEl) { statusEl.style.color = 'var(--success)'; statusEl.textContent = msg; }
+        showToast('Import complete');
+        fileInput.value = '';
+        btn.disabled = true;
+    } catch (err) {
+        if (statusEl) { statusEl.style.color = 'var(--error)'; statusEl.textContent = err.message; }
+        btn.disabled = false;
+    }
 }
 
 async function loadProfile() {

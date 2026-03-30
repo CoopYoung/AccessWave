@@ -63,6 +63,41 @@
             </form>
         </section>
 
+        <!-- Data management section -->
+        <section class="settings-card" aria-labelledby="data-heading">
+            <h2 id="data-heading" class="settings-card-title">Data Management</h2>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px">
+                Export all your sites, scans, and issue data as a JSON backup file.
+                You can later import this file to restore your data.
+            </p>
+
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:24px">
+                <button class="btn btn-outline btn-sm" id="export-btn" type="button">
+                    &#8595; Export my data
+                </button>
+                <span id="export-status" role="status" aria-live="polite" style="font-size:0.85rem;color:var(--text-muted)"></span>
+            </div>
+
+            <div>
+                <label for="import-file" style="display:block;font-weight:500;margin-bottom:6px;font-size:0.875rem">
+                    Import from backup
+                </label>
+                <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:10px">
+                    Existing sites and scans are preserved — only new data is added.
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+                    <input type="file" id="import-file" accept=".json,application/json"
+                           style="font-size:0.875rem;color:var(--text-primary)"
+                           aria-describedby="import-hint">
+                    <button class="btn btn-outline btn-sm" id="import-btn" type="button" disabled>
+                        &#8593; Import
+                    </button>
+                </div>
+                <span id="import-hint" class="field-hint">Select an accesswave-backup-*.json file</span>
+                <div id="import-status" role="status" aria-live="polite" style="margin-top:10px;font-size:0.85rem"></div>
+            </div>
+        </section>
+
         <!-- Danger zone -->
         <section class="settings-card settings-danger-zone" aria-labelledby="danger-heading">
             <h2 id="danger-heading" class="settings-card-title settings-danger-title">Danger Zone</h2>
