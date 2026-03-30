@@ -1097,6 +1097,13 @@ function renderScanCards(scans) {
             s.minor_count    ? `<span class="badge badge-minor">${s.minor_count} Minor</span>`          : '',
         ].join('');
         const isCompleted = s.status === 'completed';
+        const isActive = s.status === 'pending' || s.status === 'running';
+        const cancelBtn = isActive && !s.cancellation_requested
+            ? `<button class="btn btn-sm btn-danger scan-cancel-btn" onclick="event.stopPropagation();cancelScan(${s.id})"
+                       aria-label="Cancel scan #${s.id}">Cancel</button>`
+            : (isActive && s.cancellation_requested
+                ? `<span class="badge" style="background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#92400e)">Cancelling&hellip;</span>`
+                : '');
         return `<div class="site-card${compareMode && isCompleted ? ' scan-card-compare' : ''}" id="scan-card-${s.id}"
                      onclick="${compareMode && isCompleted ? `toggleCompareSelect(${s.id})` : `openScan(${s.id})`}"
                      role="${compareMode && isCompleted ? 'checkbox' : 'button'}"
@@ -1110,9 +1117,20 @@ function renderScanCards(scans) {
                     <div class="url">${s.pages_scanned} pages, ${s.total_issues} issues &mdash; ${timeAgo(s.completed_at || s.created_at)}</div>
                 </div>
             </div>
-            <div class="severity-bar">${badges}</div>
+            <div class="severity-bar">${badges}${cancelBtn}</div>
         </div>`;
     }).join('');
+}
+
+async function cancelScan(scanId) {
+    if (!confirm(`Cancel scan #${scanId}? Any pages already scanned will be saved.`)) return;
+    try {
+        await API.req('POST', `/scans/${scanId}/cancel`);
+        showToast('Cancellation requested — scan will stop after the current page.', 'info');
+        if (currentSiteId) await _renderScans(currentSiteId);
+    } catch (err) {
+        showToast(err.message || 'Failed to cancel scan.', 'error');
+    }
 }
 
 function toggleCompareMode() {
@@ -2868,22 +2886,24 @@ const _AUDIT_ICONS = {
     'site.deleted':     { icon: '−', cls: 'audit-icon--danger'  },
     'scan.triggered':   { icon: '⟳', cls: 'audit-icon--info'    },
     'api_key.created':  { icon: '🔐', cls: 'audit-icon--success' },
-    'api_key.revoked':  { icon: '✗', cls: 'audit-icon--danger'  },
+    'api_key.revoked':        { icon: '✗', cls: 'audit-icon--danger'  },
+    'scan.cancel_requested':  { icon: '⊘', cls: 'audit-icon--danger'  },
 };
 
 function _auditLabel(action) {
     const labels = {
-        'login.success':    'Logged in',
-        'login.failure':    'Failed login attempt',
-        'register.success': 'Account created',
-        'password.changed': 'Password changed',
-        'profile.updated':  'Profile updated',
-        'account.deleted':  'Account deleted',
-        'site.created':     'Site added',
-        'site.deleted':     'Site deleted',
-        'scan.triggered':   'Scan started',
-        'api_key.created':  'API key created',
-        'api_key.revoked':  'API key revoked',
+        'login.success':          'Logged in',
+        'login.failure':          'Failed login attempt',
+        'register.success':       'Account created',
+        'password.changed':       'Password changed',
+        'profile.updated':        'Profile updated',
+        'account.deleted':        'Account deleted',
+        'site.created':           'Site added',
+        'site.deleted':           'Site deleted',
+        'scan.triggered':         'Scan started',
+        'scan.cancel_requested':  'Scan cancellation requested',
+        'api_key.created':        'API key created',
+        'api_key.revoked':        'API key revoked',
     };
     return labels[action] || action.replace(/\./g, ' ');
 }

@@ -62,6 +62,7 @@ class Scan(Base):
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     share_token = Column(String(36), nullable=True, unique=True, index=True)  # UUID for public share links
+    cancellation_requested = Column(Boolean, default=False, nullable=False, server_default="0")
     site = relationship("Site", back_populates="scans")
     issues = relationship("Issue", back_populates="scan", cascade="all, delete-orphan")
 

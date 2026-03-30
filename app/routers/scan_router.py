@@ -145,6 +145,7 @@ class ScanOut(BaseModel):
     started_at: datetime.datetime | None
     completed_at: datetime.datetime | None
     created_at: datetime.datetime
+    cancellation_requested: bool = False
 
     class Config:
         from_attributes = True
@@ -456,6 +457,42 @@ async def compare_scans(
 async def get_scan(scan_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     scan = await _get_user_scan(scan_id, user.id, db)
     return scan
+
+
+@router.post(
+    "/scans/{scan_id}/cancel",
+    status_code=202,
+    summary="Cancel a running scan",
+    description=(
+        "Request cancellation of a pending or running scan. "
+        "The runner will stop after the current page finishes and mark the scan as 'cancelled'. "
+        "Returns 409 if the scan is already in a terminal state."
+    ),
+)
+async def cancel_scan(
+    request: Request,
+    scan_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    scan = await _get_user_scan(scan_id, user.id, db)
+    if scan.status not in ("pending", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Scan is already in terminal state '{scan.status}' and cannot be cancelled.",
+        )
+    scan.cancellation_requested = True
+    await log_action(
+        db,
+        action="scan.cancel_requested",
+        user_id=user.id,
+        request=request,
+        resource_type="scan",
+        resource_id=scan.id,
+    )
+    await db.commit()
+    logger.info("scan_cancel_requested", scan_id=scan_id, user_id=user.id)
+    return {"ok": True, "scan_id": scan_id, "message": "Cancellation requested."}
 
 
 @router.get("/scans/{scan_id}/issues", response_model=list[IssueOut], summary="List issues for a scan")

@@ -57,10 +57,18 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
 
             all_issues: list[IssueFound] = []
             pages_done = 0
+            cancelled = False
 
             for page in pages:
                 if not page.get("html"):
                     continue
+
+                # Check for cancellation request before processing each page
+                await db.refresh(scan)
+                if scan.cancellation_requested:
+                    cancelled = True
+                    break
+
                 update_progress(
                     scan.id,
                     pages_done=pages_done,
@@ -85,83 +93,91 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
                         how_to_fix=issue.how_to_fix,
                     ))
 
-            scan.pages_scanned = pages_total
+            scan.pages_scanned = pages_done
             scan.total_issues = len(all_issues)
             scan.critical_count = sum(1 for i in all_issues if i.severity == "critical")
             scan.serious_count = sum(1 for i in all_issues if i.severity == "serious")
             scan.moderate_count = sum(1 for i in all_issues if i.severity == "moderate")
             scan.minor_count = sum(1 for i in all_issues if i.severity == "minor")
-            scan.score = calculate_score(all_issues)
-            scan.status = "completed"
+            scan.score = calculate_score(all_issues) if all_issues else None
             scan.completed_at = datetime.datetime.utcnow()
 
-            logger.info(
-                "scan_complete",
-                scan_id=scan.id,
-                site_id=scan.site_id,
-                pages_scanned=scan.pages_scanned,
-                total_issues=scan.total_issues,
-                critical=scan.critical_count,
-                serious=scan.serious_count,
-                moderate=scan.moderate_count,
-                minor=scan.minor_count,
-                score=scan.score,
-            )
-            # Record per-severity issue counts
-            for severity in ("critical", "serious", "moderate", "minor"):
-                count = sum(1 for i in all_issues if i.severity == severity)
-                if count:
-                    ISSUES_FOUND.labels(severity=severity).inc(count)
+            if cancelled:
+                scan.status = "cancelled"
+                update_progress(scan.id, pages_done=pages_done, pages_total=pages_total, status="cancelled")
+                logger.info("scan_cancelled", scan_id=scan.id, site_id=scan.site_id, pages_done=pages_done)
+            else:
+                scan.score = calculate_score(all_issues)
+                scan.status = "completed"
+                logger.info(
+                    "scan_complete",
+                    scan_id=scan.id,
+                    site_id=scan.site_id,
+                    pages_scanned=scan.pages_scanned,
+                    total_issues=scan.total_issues,
+                    critical=scan.critical_count,
+                    serious=scan.serious_count,
+                    moderate=scan.moderate_count,
+                    minor=scan.minor_count,
+                    score=scan.score,
+                )
+                # Record per-severity issue counts
+                for severity in ("critical", "serious", "moderate", "minor"):
+                    count = sum(1 for i in all_issues if i.severity == severity)
+                    if count:
+                        ISSUES_FOUND.labels(severity=severity).inc(count)
 
-            # Record result distributions
-            SCAN_SCORE.observe(scan.score)
-            SCAN_PAGES_SCANNED.observe(scan.pages_scanned)
-            if scan.started_at and scan.completed_at:
-                duration = (scan.completed_at - scan.started_at).total_seconds()
-                SCAN_DURATION_SECONDS.observe(duration)
+                # Record result distributions
+                if scan.score is not None:
+                    SCAN_SCORE.observe(scan.score)
+                SCAN_PAGES_SCANNED.observe(scan.pages_scanned)
+                if scan.started_at and scan.completed_at:
+                    duration = (scan.completed_at - scan.started_at).total_seconds()
+                    SCAN_DURATION_SECONDS.observe(duration)
 
-            SCANS_COMPLETED.inc()
-            update_progress(scan.id, pages_done=pages_total, pages_total=pages_total, status="completed")
-            logger.info(f"Scan {scan.id} complete: {scan.pages_scanned} pages, {scan.total_issues} issues, score {scan.score}")
+                SCANS_COMPLETED.inc()
+                update_progress(scan.id, pages_done=pages_total, pages_total=pages_total, status="completed")
+                logger.info(f"Scan {scan.id} complete: {scan.pages_scanned} pages, {scan.total_issues} issues, score {scan.score}")
 
-            # Fire scan.completed webhooks for the site owner
-            wh_result = await db.execute(
-                select(Webhook).where(Webhook.user_id == site.user_id, Webhook.is_active == True)
-            )
-            webhooks = wh_result.scalars().all()
-            await fire_event(webhooks, "scan.completed", {
-                "scan_id": scan.id,
-                "site_id": site.id,
-                "site_name": site.name,
-                "site_url": site.url,
-                "score": scan.score,
-                "pages_scanned": scan.pages_scanned,
-                "total_issues": scan.total_issues,
-                "critical_count": scan.critical_count,
-                "serious_count": scan.serious_count,
-                "moderate_count": scan.moderate_count,
-                "minor_count": scan.minor_count,
-            })
+            if not cancelled:
+                # Fire scan.completed webhooks for the site owner
+                wh_result = await db.execute(
+                    select(Webhook).where(Webhook.user_id == site.user_id, Webhook.is_active == True)
+                )
+                webhooks = wh_result.scalars().all()
+                await fire_event(webhooks, "scan.completed", {
+                    "scan_id": scan.id,
+                    "site_id": site.id,
+                    "site_name": site.name,
+                    "site_url": site.url,
+                    "score": scan.score,
+                    "pages_scanned": scan.pages_scanned,
+                    "total_issues": scan.total_issues,
+                    "critical_count": scan.critical_count,
+                    "serious_count": scan.serious_count,
+                    "moderate_count": scan.moderate_count,
+                    "minor_count": scan.minor_count,
+                })
 
-            # Send email notification if the owner has opted in
-            try:
-                owner_result = await db.execute(select(User).where(User.id == site.user_id))
-                owner = owner_result.scalar_one_or_none()
-                if owner and owner.email_notify_on_complete:
-                    await send_scan_completed(
-                        to_address=owner.email,
-                        site_name=site.name,
-                        site_url=site.url,
-                        scan_id=scan.id,
-                        score=scan.score,
-                        pages_scanned=scan.pages_scanned,
-                        total_issues=scan.total_issues,
-                        critical_count=scan.critical_count,
-                        serious_count=scan.serious_count,
-                        score_threshold=owner.email_score_threshold,
-                    )
-            except Exception:
-                pass  # Never let email errors mask the scan result
+                # Send email notification if the owner has opted in
+                try:
+                    owner_result = await db.execute(select(User).where(User.id == site.user_id))
+                    owner = owner_result.scalar_one_or_none()
+                    if owner and owner.email_notify_on_complete:
+                        await send_scan_completed(
+                            to_address=owner.email,
+                            site_name=site.name,
+                            site_url=site.url,
+                            scan_id=scan.id,
+                            score=scan.score,
+                            pages_scanned=scan.pages_scanned,
+                            total_issues=scan.total_issues,
+                            critical_count=scan.critical_count,
+                            serious_count=scan.serious_count,
+                            score_threshold=owner.email_score_threshold,
+                        )
+                except Exception:
+                    pass  # Never let email errors mask the scan result
 
         except Exception as e:
             logger.error("scan_failed", scan_id=scan.id, site_id=scan.site_id, error=str(e), exc_info=True)
