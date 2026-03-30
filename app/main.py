@@ -36,7 +36,78 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="AccessWave", version="1.0.0", lifespan=lifespan)
+_DESCRIPTION = """
+**AccessWave** is a WCAG 2.1 accessibility scanner SaaS. Scan websites for
+accessibility issues, track scores over time, and export results.
+
+## Authentication
+
+Most endpoints require a **Bearer JWT** obtained from `/api/auth/login` or
+`/api/auth/register`. Pass it in the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+Alternatively you can pass a long-lived **API Key** (managed at `/api/keys`):
+
+```
+Authorization: Bearer aw_<key>
+```
+
+## Rate limits
+
+| Scope | Default |
+|-------|---------|
+| General API | 60 req/min |
+| Scan start | 10 req/min |
+| Login | 10 req/min |
+| Register | 5 req/min |
+
+Exceeded limits return **429 Too Many Requests** with a `Retry-After` header.
+"""
+
+_TAGS: list[dict] = [
+    {
+        "name": "auth",
+        "description": "Register, log in, manage your profile and password.",
+    },
+    {
+        "name": "scans",
+        "description": (
+            "Create and manage **sites**, trigger **scans**, retrieve issues, "
+            "compare results, and share public reports."
+        ),
+    },
+    {
+        "name": "api-keys",
+        "description": "Create and revoke long-lived API keys for programmatic access.",
+    },
+    {
+        "name": "webhooks",
+        "description": "Register HTTPS endpoints to receive `scan.completed` / `scan.failed` events.",
+    },
+    {
+        "name": "backup",
+        "description": "Export all your data as JSON and restore it later.",
+    },
+    {
+        "name": "health",
+        "description": "Liveness and readiness probes for container orchestration.",
+    },
+]
+
+app = FastAPI(
+    title="AccessWave API",
+    version="1.0.0",
+    description=_DESCRIPTION,
+    contact={"name": "AccessWave Support", "url": "https://accesswave.io"},
+    license_info={"name": "MIT"},
+    openapi_tags=_TAGS,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 app.state.limiter = limiter
 
 # Rate-limit handler must be registered before the generic HTTPException handler
@@ -136,3 +207,8 @@ async def webhooks_page(request: Request):
 @app.get("/share/{token}", response_class=HTMLResponse)
 async def shared_report_page(request: Request, token: str):
     return templates.TemplateResponse("shared_report.html", {"request": request, "token": token})
+
+
+@app.get("/api-reference", response_class=HTMLResponse, include_in_schema=False)
+async def api_reference_page(request: Request):
+    return templates.TemplateResponse("api_reference.html", {"request": request})

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Reference - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+    <style>
+        /* ── API Reference page styles ── */
+        .api-hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark, #1d4ed8) 100%);
+            color: #fff;
+            padding: 3rem 0 2.5rem;
+            text-align: center;
+        }
+        .api-hero h1 { font-size: 2.2rem; margin: 0 0 .5rem; }
+        .api-hero p  { opacity: .88; font-size: 1.05rem; margin: 0 0 1.5rem; }
+        .api-hero-btns { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+        .api-hero-btns a {
+            display: inline-flex; align-items: center; gap: .4rem;
+            padding: .55rem 1.25rem; border-radius: 6px; font-weight: 600;
+            text-decoration: none; font-size: .95rem; transition: opacity .15s;
+        }
+        .api-hero-btns a:hover { opacity: .85; }
+        .btn-swagger { background: #85ea2d; color: #1c1c1c; }
+        .btn-redoc   { background: #fff;    color: var(--primary); }
+
+        .api-layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 2rem;
+            align-items: start;
+            padding: 2.5rem 0 4rem;
+        }
+        @media (max-width: 768px) {
+            .api-layout { grid-template-columns: 1fr; }
+            .api-toc { display: none; }
+        }
+
+        /* ── Table of contents ── */
+        .api-toc {
+            position: sticky; top: 80px;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border, #e5e7eb);
+            border-radius: 10px;
+            padding: 1.2rem 1rem;
+        }
+        .api-toc h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted, #6b7280); margin: 0 0 .75rem; }
+        .api-toc ul { list-style: none; margin: 0; padding: 0; }
+        .api-toc li + li { margin-top: .25rem; }
+        .api-toc a { color: var(--text, #111); text-decoration: none; font-size: .9rem; display: block; padding: .25rem .5rem; border-radius: 5px; }
+        .api-toc a:hover, .api-toc a.active { background: var(--primary-light, #eff6ff); color: var(--primary); }
+
+        /* ── Content sections ── */
+        .api-content section { margin-bottom: 3rem; }
+        .api-content h2 {
+            font-size: 1.35rem; border-bottom: 2px solid var(--border, #e5e7eb);
+            padding-bottom: .4rem; margin-bottom: 1.2rem;
+        }
+        .api-content h3 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; color: var(--text, #111); }
+
+        /* ── Endpoint table ── */
+        .endpoint-list { display: flex; flex-direction: column; gap: .6rem; }
+        .endpoint-row {
+            display: grid;
+            grid-template-columns: 70px 1fr auto;
+            align-items: center;
+            gap: .75rem;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border, #e5e7eb);
+            border-radius: 8px;
+            padding: .65rem 1rem;
+        }
+        .method {
+            font-size: .75rem; font-weight: 700; font-family: monospace;
+            text-transform: uppercase; padding: .2rem .45rem; border-radius: 4px;
+            text-align: center; letter-spacing: .04em;
+        }
+        .method-get    { background: #dcfce7; color: #166534; }
+        .method-post   { background: #dbeafe; color: #1d4ed8; }
+        .method-patch  { background: #fef3c7; color: #92400e; }
+        .method-delete { background: #fee2e2; color: #991b1b; }
+        .endpoint-path { font-family: monospace; font-size: .9rem; word-break: break-all; }
+        .endpoint-summary { font-size: .85rem; color: var(--text-muted, #6b7280); text-align: right; }
+
+        /* ── Code blocks ── */
+        .code-block {
+            background: var(--code-bg, #1e1e2e);
+            color: #cdd6f4;
+            border-radius: 8px;
+            padding: 1.1rem 1.25rem;
+            overflow-x: auto;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: .83rem;
+            line-height: 1.6;
+            margin: .6rem 0 1rem;
+            position: relative;
+        }
+        [data-theme="light"] .code-block { background: #1e1e2e; }
+        .code-block .comment { color: #6c7086; }
+        .code-block .string  { color: #a6e3a1; }
+        .code-block .keyword { color: #89b4fa; }
+        .code-block .var     { color: #cba6f7; }
+
+        .copy-btn {
+            position: absolute; top: .6rem; right: .6rem;
+            background: rgba(255,255,255,.12); border: none; color: #cdd6f4;
+            border-radius: 4px; padding: .25rem .55rem; font-size: .78rem;
+            cursor: pointer; transition: background .15s;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,.22); }
+
+        /* ── Rate-limit table ── */
+        .rate-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        .rate-table th, .rate-table td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid var(--border, #e5e7eb); }
+        .rate-table th { color: var(--text-muted, #6b7280); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
+
+        /* ── Response schema pills ── */
+        .schema-pill {
+            display: inline-block; background: var(--primary-light, #eff6ff);
+            color: var(--primary); font-size: .78rem; font-weight: 600;
+            padding: .15rem .5rem; border-radius: 999px; font-family: monospace;
+        }
+
+        /* ── Auth callout ── */
+        .callout {
+            display: flex; gap: .75rem; align-items: flex-start;
+            background: var(--primary-light, #eff6ff);
+            border-left: 4px solid var(--primary);
+            border-radius: 0 8px 8px 0;
+            padding: .9rem 1.1rem; margin: .75rem 0 1.25rem;
+            font-size: .9rem;
+        }
+        .callout-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: .05rem; }
+
+        /* ── Base URL badge ── */
+        .base-url {
+            display: inline-flex; align-items: center; gap: .5rem;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border, #e5e7eb);
+            border-radius: 8px; padding: .55rem 1rem;
+            font-family: monospace; font-size: .95rem; margin-bottom: 1.25rem;
+        }
+        .base-url-label { font-size: .75rem; font-weight: 600; color: var(--text-muted, #6b7280); font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <a href="#api-main" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/api-reference" aria-current="page">API Docs</a>
+            <a href="/settings">Settings</a>
+            <a href="/api-keys">API Keys</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+        </div>
+    </div></nav>
+
+    <div class="api-hero" role="banner">
+        <div class="container">
+            <h1>AccessWave API Reference</h1>
+            <p>REST API for scanning, monitoring, and reporting on website accessibility</p>
+            <div class="api-hero-btns">
+                <a href="/docs" class="btn-swagger" target="_blank" rel="noopener">
+                    <span aria-hidden="true">&#9654;</span> Swagger UI
+                </a>
+                <a href="/redoc" class="btn-redoc" target="_blank" rel="noopener">
+                    <span aria-hidden="true">&#128196;</span> ReDoc
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <main id="api-main">
+    <div class="container">
+    <div class="api-layout">
+
+        <!-- ── Table of contents ── -->
+        <aside class="api-toc" aria-label="API reference navigation">
+            <h2>On this page</h2>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#authentication">Authentication</a></li>
+                <li><a href="#rate-limits">Rate Limits</a></li>
+                <li><a href="#endpoints-auth">Auth Endpoints</a></li>
+                <li><a href="#endpoints-sites">Sites</a></li>
+                <li><a href="#endpoints-scans">Scans</a></li>
+                <li><a href="#endpoints-issues">Issues</a></li>
+                <li><a href="#endpoints-share">Sharing</a></li>
+                <li><a href="#endpoints-keys">API Keys</a></li>
+                <li><a href="#endpoints-webhooks">Webhooks</a></li>
+                <li><a href="#endpoints-backup">Backup</a></li>
+                <li><a href="#endpoints-health">Health</a></li>
+                <li><a href="#code-examples">Code Examples</a></li>
+            </ul>
+        </aside>
+
+        <!-- ── Main content ── -->
+        <div class="api-content">
+
+            <!-- Overview -->
+            <section id="overview">
+                <h2>Overview</h2>
+                <div class="base-url">
+                    <span class="base-url-label">BASE&nbsp;URL</span>
+                    <span id="base-url-val">https://your-domain.com</span>
+                </div>
+                <p>
+                    The AccessWave REST API is built with <strong>FastAPI</strong> and follows
+                    standard REST conventions. All request and response bodies are
+                    <strong>JSON</strong>. Dates are ISO 8601 UTC strings.
+                </p>
+                <p>
+                    The interactive <a href="/docs" target="_blank" rel="noopener">Swagger UI</a>
+                    lets you authenticate and try every endpoint directly in the browser.
+                    A <a href="/redoc" target="_blank" rel="noopener">ReDoc</a> view is also
+                    available for reading-friendly documentation.
+                </p>
+            </section>
+
+            <!-- Authentication -->
+            <section id="authentication">
+                <h2>Authentication</h2>
+
+                <h3>JWT Bearer Token</h3>
+                <p>
+                    Obtain a token by <a href="#endpoints-auth">registering or logging in</a>.
+                    Send it on every protected request:
+                </p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+<pre>Authorization: Bearer &lt;your-jwt-token&gt;</pre>
+                </div>
+
+                <h3>API Key</h3>
+                <div class="callout">
+                    <span class="callout-icon" aria-hidden="true">&#128273;</span>
+                    <span>
+                        Create a long-lived API key in your
+                        <a href="/api-keys">API Keys</a> settings page.
+                        Use it exactly like a JWT in the <code>Authorization</code> header.
+                        Keys start with <code>aw_</code>.
+                    </span>
+                </div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+<pre>Authorization: Bearer aw_a1b2c3d4...</pre>
+                </div>
+
+                <h3>Error responses</h3>
+                <p>
+                    Unauthenticated requests receive <strong>401 Unauthorized</strong>.
+                    Forbidden operations (e.g. plan limits) receive <strong>403 Forbidden</strong>.
+                </p>
+            </section>
+
+            <!-- Rate limits -->
+            <section id="rate-limits">
+                <h2>Rate Limits</h2>
+                <table class="rate-table" aria-label="Rate limit table">
+                    <thead><tr><th>Endpoint group</th><th>Limit</th></tr></thead>
+                    <tbody>
+                        <tr><td>General API</td><td>60 requests / minute</td></tr>
+                        <tr><td><code>POST /api/sites/{site_id}/scan</code></td><td>10 requests / minute</td></tr>
+                        <tr><td><code>POST /api/auth/login</code></td><td>10 requests / minute</td></tr>
+                        <tr><td><code>POST /api/auth/register</code></td><td>5 requests / minute</td></tr>
+                    </tbody>
+                </table>
+                <p style="margin-top:.75rem;font-size:.9rem;color:var(--text-muted,#6b7280)">
+                    Exceeded limits return <strong>429 Too Many Requests</strong> with a
+                    <code>Retry-After</code> header indicating when to retry.
+                </p>
+            </section>
+
+            <!-- Auth endpoints -->
+            <section id="endpoints-auth">
+                <h2>Auth Endpoints</h2>
+                <div class="endpoint-list" aria-label="Authentication endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/auth/register</span>
+                        <span class="endpoint-summary">Create account → JWT</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/auth/login</span>
+                        <span class="endpoint-summary">Log in → JWT</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/auth/me</span>
+                        <span class="endpoint-summary">Current user info</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-patch">PUT</span>
+                        <span class="endpoint-path">/api/auth/profile</span>
+                        <span class="endpoint-summary">Update email</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-patch">PUT</span>
+                        <span class="endpoint-path">/api/auth/password</span>
+                        <span class="endpoint-summary">Change password</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/auth/account</span>
+                        <span class="endpoint-summary">Delete account</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sites -->
+            <section id="endpoints-sites">
+                <h2>Sites</h2>
+                <p>A <em>site</em> is a monitored website. Each site belongs to one user and can have multiple scans.</p>
+                <div class="endpoint-list" aria-label="Site endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/sites</span>
+                        <span class="endpoint-summary">List all sites</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/sites</span>
+                        <span class="endpoint-summary">Add a site</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-patch">PATCH</span>
+                        <span class="endpoint-path">/api/sites/{site_id}</span>
+                        <span class="endpoint-summary">Update name / URL</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/sites/{site_id}</span>
+                        <span class="endpoint-summary">Delete site + all scans</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-patch">PATCH</span>
+                        <span class="endpoint-path">/api/sites/{site_id}/schedule</span>
+                        <span class="endpoint-summary">Set scan schedule (none / daily / weekly / monthly)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Scans -->
+            <section id="endpoints-scans">
+                <h2>Scans</h2>
+                <p>
+                    Scans run asynchronously. After starting a scan with
+                    <code>POST .../scan</code> you can:
+                </p>
+                <ul>
+                    <li>Poll <code>GET /api/scans/{id}</code> until <code>status</code> is <code>completed</code> or <code>failed</code>.</li>
+                    <li>Subscribe to the <strong>SSE stream</strong> at <code>/api/scans/{id}/stream?token=&lt;jwt&gt;</code> for real-time progress events.</li>
+                </ul>
+                <div class="endpoint-list" aria-label="Scan endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/sites/{site_id}/scan</span>
+                        <span class="endpoint-summary">Start a scan</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/sites/{site_id}/scans</span>
+                        <span class="endpoint-summary">List scans (filterable)</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/scans/{scan_id}</span>
+                        <span class="endpoint-summary">Get scan details</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/scans/{scan_id}/stream</span>
+                        <span class="endpoint-summary">SSE progress stream (token via ?token=)</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/scans/compare?scan_a=&amp;scan_b=</span>
+                        <span class="endpoint-summary">Diff two scans</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Issues -->
+            <section id="endpoints-issues">
+                <h2>Issues</h2>
+                <p>Issues are individual WCAG violations found during a scan, each with a severity, rule ID, selector, and fix guidance.</p>
+                <div class="endpoint-list" aria-label="Issue endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/scans/{scan_id}/issues</span>
+                        <span class="endpoint-summary">List issues (filter by severity / rule_id)</span>
+                    </div>
+                </div>
+
+                <h3>Severity levels</h3>
+                <p>
+                    <span class="schema-pill">critical</span>&nbsp;
+                    <span class="schema-pill">serious</span>&nbsp;
+                    <span class="schema-pill">moderate</span>&nbsp;
+                    <span class="schema-pill">minor</span>
+                </p>
+                <p style="font-size:.9rem;color:var(--text-muted,#6b7280)">
+                    These map directly to the axe-core impact levels.
+                </p>
+            </section>
+
+            <!-- Share -->
+            <section id="endpoints-share">
+                <h2>Sharing</h2>
+                <p>
+                    Generate a public, token-authenticated share link for any completed scan.
+                    Shared reports are read-only and require no authentication.
+                </p>
+                <div class="endpoint-list" aria-label="Sharing endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/scans/{scan_id}/share</span>
+                        <span class="endpoint-summary">Generate share link</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/scans/{scan_id}/share</span>
+                        <span class="endpoint-summary">Revoke share link</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/share/{token}</span>
+                        <span class="endpoint-summary">Public: get shared scan (no auth)</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/share/{token}/issues</span>
+                        <span class="endpoint-summary">Public: get issues for shared scan</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/sites/{site_id}/badge.svg</span>
+                        <span class="endpoint-summary">Public: SVG accessibility score badge</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Keys -->
+            <section id="endpoints-keys">
+                <h2>API Keys</h2>
+                <div class="callout">
+                    <span class="callout-icon" aria-hidden="true">&#128274;</span>
+                    <span>The plaintext key is returned <strong>only on creation</strong>. Store it securely — it cannot be retrieved later.</span>
+                </div>
+                <div class="endpoint-list" aria-label="API key endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/keys</span>
+                        <span class="endpoint-summary">List API keys</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/keys</span>
+                        <span class="endpoint-summary">Create API key (max 10)</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/keys/{key_id}</span>
+                        <span class="endpoint-summary">Revoke API key</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Webhooks -->
+            <section id="endpoints-webhooks">
+                <h2>Webhooks</h2>
+                <p>
+                    Register an HTTPS URL to receive <code>scan.completed</code> or
+                    <code>scan.failed</code> events. Each delivery is signed with an
+                    HMAC-SHA256 signature in the <code>X-AccessWave-Signature</code> header.
+                </p>
+                <div class="endpoint-list" aria-label="Webhook endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/webhooks</span>
+                        <span class="endpoint-summary">List webhooks</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/webhooks</span>
+                        <span class="endpoint-summary">Create webhook</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-patch">PATCH</span>
+                        <span class="endpoint-path">/api/webhooks/{id}</span>
+                        <span class="endpoint-summary">Update webhook</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-delete">DELETE</span>
+                        <span class="endpoint-path">/api/webhooks/{id}</span>
+                        <span class="endpoint-summary">Delete webhook</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/webhooks/{id}/test</span>
+                        <span class="endpoint-summary">Send test delivery</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Backup -->
+            <section id="endpoints-backup">
+                <h2>Backup &amp; Restore</h2>
+                <div class="endpoint-list" aria-label="Backup endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/api/backup/export</span>
+                        <span class="endpoint-summary">Download all data as JSON</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-post">POST</span>
+                        <span class="endpoint-path">/api/backup/import</span>
+                        <span class="endpoint-summary">Restore from exported JSON</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Health -->
+            <section id="endpoints-health">
+                <h2>Health Endpoints</h2>
+                <p>No authentication required. Use these for container liveness / readiness probes.</p>
+                <div class="endpoint-list" aria-label="Health endpoints">
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/health</span>
+                        <span class="endpoint-summary">Liveness probe (process alive)</span>
+                    </div>
+                    <div class="endpoint-row">
+                        <span class="method method-get">GET</span>
+                        <span class="endpoint-path">/ready</span>
+                        <span class="endpoint-summary">Readiness probe (DB reachable)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Code examples -->
+            <section id="code-examples">
+                <h2>Code Examples</h2>
+
+                <h3>Register and log in (cURL)</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy cURL login example">Copy</button>
+<pre><span class="comment"># Register</span>
+curl -s -X POST https://your-domain.com/api/auth/register \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{"email":"you@example.com","password":"s3cr3tpass"}'</span>
+
+<span class="comment"># Log in</span>
+<span class="var">TOKEN</span>=$(curl -s -X POST https://your-domain.com/api/auth/login \
+  -d <span class="string">"username=you@example.com&amp;password=s3cr3tpass"</span> \
+  | python3 -c <span class="string">"import sys,json; print(json.load(sys.stdin)['access_token'])"</span>)
+echo <span class="var">$TOKEN</span></pre>
+                </div>
+
+                <h3>Add a site and start a scan (cURL)</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy cURL scan example">Copy</button>
+<pre><span class="comment"># Add a site</span>
+<span class="var">SITE</span>=$(curl -s -X POST https://your-domain.com/api/sites \
+  -H <span class="string">"Authorization: Bearer $TOKEN"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{"name":"My Site","url":"https://example.com"}'</span>)
+<span class="var">SITE_ID</span>=$(echo <span class="var">$SITE</span> | python3 -c <span class="string">"import sys,json; print(json.load(sys.stdin)['id'])"</span>)
+
+<span class="comment"># Start a scan</span>
+curl -s -X POST https://your-domain.com/api/sites/<span class="var">$SITE_ID</span>/scan \
+  -H <span class="string">"Authorization: Bearer $TOKEN"</span></pre>
+                </div>
+
+                <h3>Retrieve issues (Python)</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python example">Copy</button>
+<pre><span class="keyword">import</span> requests
+
+BASE = <span class="string">"https://your-domain.com"</span>
+TOKEN = <span class="string">"&lt;your-token&gt;"</span>
+HEADERS = {<span class="string">"Authorization"</span>: <span class="keyword">f</span><span class="string">"Bearer {TOKEN}"</span>}
+
+<span class="comment"># List critical issues for scan 42</span>
+resp = requests.get(
+    <span class="keyword">f</span><span class="string">"{BASE}/api/scans/42/issues"</span>,
+    params={<span class="string">"severity"</span>: <span class="string">"critical"</span>, <span class="string">"limit"</span>: 50},
+    headers=HEADERS,
+)
+<span class="keyword">for</span> issue <span class="keyword">in</span> resp.json():
+    <span class="keyword">print</span>(issue[<span class="string">"rule_id"</span>], <span class="string">"-"</span>, issue[<span class="string">"message"</span>])</pre>
+                </div>
+
+                <h3>Verify a webhook signature (Python)</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy webhook signature verification example">Copy</button>
+<pre><span class="keyword">import</span> hashlib, hmac
+
+<span class="keyword">def</span> <span class="var">verify_webhook</span>(payload_bytes: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(
+        secret.encode(), payload_bytes, hashlib.sha256
+    ).hexdigest()
+    <span class="keyword">return</span> hmac.compare_digest(expected, signature)
+
+<span class="comment"># In your FastAPI/Flask handler:</span>
+<span class="comment"># sig = request.headers["X-AccessWave-Signature"]</span>
+<span class="comment"># ok  = verify_webhook(request.body, sig, WEBHOOK_SECRET)</span></pre>
+                </div>
+            </section>
+
+        </div><!-- /.api-content -->
+    </div><!-- /.api-layout -->
+    </div><!-- /.container -->
+    </main>
+
+    <script>
+    // Set base URL dynamically
+    document.getElementById('base-url-val').textContent = window.location.origin;
+
+    // Copy-to-clipboard for code blocks
+    function copyCode(btn) {
+        const pre = btn.nextElementSibling;
+        navigator.clipboard.writeText(pre.innerText).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+        });
+    }
+
+    // Highlight active TOC link on scroll
+    const sections = document.querySelectorAll('.api-content section[id]');
+    const tocLinks = document.querySelectorAll('.api-toc a');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                tocLinks.forEach(a => a.classList.remove('active'));
+                const active = document.querySelector(`.api-toc a[href="#${entry.target.id}"]`);
+                if (active) active.classList.add('active');
+            }
+        });
+    }, { rootMargin: '-20% 0px -75% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // Dark mode toggle
+    const darkToggle = document.getElementById('dark-toggle');
+    function applyTheme(t) {
+        if (t === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            darkToggle.setAttribute('aria-pressed', 'true');
+            darkToggle.setAttribute('aria-label', 'Switch to light mode');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            darkToggle.setAttribute('aria-pressed', 'false');
+            darkToggle.setAttribute('aria-label', 'Switch to dark mode');
+        }
+        localStorage.setItem('aw_theme', t);
+    }
+    const savedTheme = localStorage.getItem('aw_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(savedTheme);
+    darkToggle.addEventListener('click', () => {
+        applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    // Mobile nav toggle
+    const navToggle = document.querySelector('.nav-toggle');
+    const navLinks  = document.getElementById('nav-links');
+    if (navToggle) {
+        navToggle.addEventListener('click', () => {
+            const open = navToggle.getAttribute('aria-expanded') === 'true';
+            navToggle.setAttribute('aria-expanded', String(!open));
+            navLinks.classList.toggle('open', !open);
+        });
+    }
+    </script>
+</body>
+</html>

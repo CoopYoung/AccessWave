@@ -211,7 +211,7 @@ class ActivityDay(BaseModel):
 
 # --- Sites ---
 
-@router.get("/sites", response_model=list[SiteOut])
+@router.get("/sites", response_model=list[SiteOut], summary="List sites")
 async def list_sites(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Site).where(Site.user_id == user.id).order_by(Site.created_at.desc()))
     sites = result.scalars().all()
@@ -232,7 +232,7 @@ async def list_sites(user: User = Depends(get_current_user), db: AsyncSession = 
     return out
 
 
-@router.post("/sites", response_model=SiteOut, status_code=201)
+@router.post("/sites", response_model=SiteOut, status_code=201, summary="Add a site")
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def create_site(request: Request, body: SiteCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     plan = settings.PLAN_LIMITS[user.plan]
@@ -247,7 +247,7 @@ async def create_site(request: Request, body: SiteCreate, user: User = Depends(g
     return SiteOut(id=site.id, name=site.name, url=site.url, created_at=site.created_at)
 
 
-@router.patch("/sites/{site_id}", response_model=SiteOut)
+@router.patch("/sites/{site_id}", response_model=SiteOut, summary="Update site name / URL")
 async def update_site(
     site_id: int,
     body: SiteUpdate,
@@ -264,7 +264,7 @@ async def update_site(
     return SiteOut(id=site.id, name=site.name, url=site.url, created_at=site.created_at)
 
 
-@router.delete("/sites/{site_id}", status_code=204)
+@router.delete("/sites/{site_id}", status_code=204, summary="Delete a site")
 async def delete_site(site_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     site = await _get_user_site(site_id, user.id, db)
     logger.info("site_deleted", user_id=user.id, site_id=site.id, site_url=site.url)
@@ -322,7 +322,17 @@ async def update_schedule(
 
 # --- Scans ---
 
-@router.post("/sites/{site_id}/scan", response_model=ScanOut, status_code=201)
+@router.post(
+    "/sites/{site_id}/scan",
+    response_model=ScanOut,
+    status_code=201,
+    summary="Start a scan",
+    description=(
+        "Queue an accessibility scan for the given site. "
+        "Returns the new scan object immediately; the scan runs asynchronously. "
+        "Use the SSE stream endpoint to follow progress in real time."
+    ),
+)
 @limiter.limit(settings.RATE_LIMIT_SCAN_START)
 async def start_scan(
     request: Request,
@@ -351,7 +361,7 @@ async def start_scan(
     return scan
 
 
-@router.get("/sites/{site_id}/scans", response_model=list[ScanOut])
+@router.get("/sites/{site_id}/scans", response_model=list[ScanOut], summary="List scans for a site")
 async def list_scans(
     site_id: int,
     limit: int = Query(default=20, ge=1, le=50),
@@ -429,13 +439,13 @@ async def compare_scans(
     )
 
 
-@router.get("/scans/{scan_id}", response_model=ScanOut)
+@router.get("/scans/{scan_id}", response_model=ScanOut, summary="Get a scan")
 async def get_scan(scan_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     scan = await _get_user_scan(scan_id, user.id, db)
     return scan
 
 
-@router.get("/scans/{scan_id}/issues", response_model=list[IssueOut])
+@router.get("/scans/{scan_id}/issues", response_model=list[IssueOut], summary="List issues for a scan")
 async def get_issues(
     scan_id: int,
     severity: Literal["critical", "serious", "moderate", "minor"] | None = None,
@@ -465,7 +475,7 @@ async def get_issues(
 
 # --- Dashboard stats ---
 
-@router.get("/dashboard/stats", response_model=ScanSummary)
+@router.get("/dashboard/stats", response_model=ScanSummary, summary="Dashboard summary statistics")
 async def dashboard_stats(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     sites = (await db.execute(select(func.count()).select_from(Site).where(Site.user_id == user.id))).scalar() or 0
     scans = (await db.execute(

@@ -67,7 +67,13 @@ class DeleteAccountRequest(BaseModel):
     password: str
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=201,
+    summary="Create a new account",
+    description="Register with an email and password. Returns a Bearer JWT on success.",
+)
 @limiter.limit(settings.RATE_LIMIT_AUTH_REGISTER)
 async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
@@ -87,7 +93,15 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     return TokenResponse(access_token=create_access_token(user.id))
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Log in",
+    description=(
+        "Authenticate with email + password (OAuth2 `password` flow). "
+        "Returns a short-lived Bearer JWT valid for the duration set in `ACCESS_TOKEN_EXPIRE_MINUTES`."
+    ),
+)
 @limiter.limit(settings.RATE_LIMIT_AUTH_LOGIN)
 async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == form.username))
@@ -101,7 +115,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
     return TokenResponse(access_token=create_access_token(user.id))
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut, summary="Get current user")
 async def get_me(user: User = Depends(get_current_user)):
     return user
 
