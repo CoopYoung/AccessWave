@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+    <style>
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .admin-stat { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px 16px; text-align: center; }
+        .admin-stat .label { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+        .admin-stat .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+        .admin-section { margin-bottom: 40px; }
+        .admin-section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .user-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+        .user-table th { text-align: left; padding: 8px 10px; background: var(--bg-alt, var(--card-bg)); border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap; }
+        .user-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .user-table tr:hover td { background: var(--bg-alt, rgba(0,0,0,.03)); }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+        .badge-admin { background: var(--accent); color: #fff; }
+        .badge-banned { background: var(--red, #ef4444); color: #fff; }
+        .badge-free { background: var(--border); color: var(--text-muted); }
+        .badge-pro { background: #7c3aed; color: #fff; }
+        .badge-plan { background: var(--border); color: var(--text); }
+        .search-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .search-bar input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); font-size: .875rem; }
+        .search-bar input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .filter-checks { display: flex; gap: 16px; align-items: center; font-size: .875rem; }
+        .filter-checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .action-btn { padding: 4px 10px; border-radius: 5px; font-size: .78rem; font-weight: 600; border: 1px solid currentColor; cursor: pointer; background: transparent; transition: background .15s; }
+        .action-btn:hover { opacity: .85; }
+        .action-ban { color: var(--red, #ef4444); }
+        .action-unban { color: var(--green, #22c55e); }
+        .action-admin { color: var(--accent); }
+        .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: .875rem; }
+        .pagination button { padding: 5px 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--card-bg); color: var(--text); cursor: pointer; }
+        .pagination button:disabled { opacity: .4; cursor: default; }
+        .pagination button:not(:disabled):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        #admin-error { color: var(--red, #ef4444); padding: 10px; }
+        .table-wrap { overflow-x: auto; }
+        .empty-msg { color: var(--text-muted); font-style: italic; padding: 20px 0; text-align: center; }
+    </style>
+</head>
+<body>
+    <a href="#admin-main" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/settings">Settings</a>
+            <a href="#" id="logout-btn">Log out</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+        </div>
+    </div></nav>
+
+    <main id="admin-main">
+    <div class="container" style="max-width:1100px;">
+        <div class="dash-header" style="margin-bottom:24px;">
+            <h1>Admin Dashboard</h1>
+        </div>
+
+        <div id="admin-error" role="alert" aria-live="polite" hidden></div>
+
+        <!-- System Stats -->
+        <section class="admin-section" aria-labelledby="stats-heading">
+            <h2 id="stats-heading">System Statistics</h2>
+            <div class="admin-grid" id="stats-grid" aria-label="System statistics">
+                <div class="admin-stat"><div class="label">Total Users</div><div class="value" id="stat-users">--</div></div>
+                <div class="admin-stat"><div class="label">Total Sites</div><div class="value" id="stat-sites">--</div></div>
+                <div class="admin-stat"><div class="label">Total Scans</div><div class="value" id="stat-scans">--</div></div>
+                <div class="admin-stat"><div class="label">Scans Today</div><div class="value" id="stat-today">--</div></div>
+            </div>
+        </section>
+
+        <!-- User Management -->
+        <section class="admin-section" aria-labelledby="users-heading">
+            <h2 id="users-heading">User Management</h2>
+            <div class="search-bar" role="search">
+                <label for="user-search" class="sr-only">Search users by email</label>
+                <input type="search" id="user-search" placeholder="Search by email…" autocomplete="off">
+                <div class="filter-checks">
+                    <label><input type="checkbox" id="filter-banned"> Banned only</label>
+                    <label><input type="checkbox" id="filter-admin"> Admins only</label>
+                </div>
+                <button class="btn btn-outline btn-sm" id="search-btn">Search</button>
+            </div>
+            <div class="table-wrap">
+                <table class="user-table" aria-label="User list" aria-live="polite" aria-atomic="true">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Plan</th>
+                            <th scope="col">Sites</th>
+                            <th scope="col">Scans</th>
+                            <th scope="col">Joined</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-tbody">
+                        <tr><td colspan="8" class="empty-msg">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" aria-label="User list pagination">
+                <button id="prev-btn" disabled aria-label="Previous page">← Prev</button>
+                <span id="page-info">Page 1</span>
+                <button id="next-btn" aria-label="Next page">Next →</button>
+            </div>
+        </section>
+    </div>
+    </main>
+
+    <script>
+    // -------------------------------------------------------------------------
+    // Auth helpers (same pattern as app.js)
+    // -------------------------------------------------------------------------
+    const API = {
+        token: localStorage.getItem('aw_token'),
+        headers() {
+            const h = { 'Content-Type': 'application/json' };
+            if (this.token) h['Authorization'] = `Bearer ${this.token}`;
+            return h;
+        },
+    };
+
+    // Dark mode
+    (function () {
+        const btn = document.getElementById('dark-toggle');
+        if (!btn) return;
+        const html = document.documentElement;
+        function applyTheme(dark) {
+            html.setAttribute('data-theme', dark ? 'dark' : 'light');
+            btn.setAttribute('aria-pressed', String(dark));
+            btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.textContent = dark ? '☀️' : '🌙';
+        }
+        const stored = localStorage.getItem('aw_theme');
+        applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme:dark)').matches);
+        btn.addEventListener('click', () => {
+            const nowDark = html.getAttribute('data-theme') !== 'dark';
+            applyTheme(nowDark);
+            localStorage.setItem('aw_theme', nowDark ? 'dark' : 'light');
+        });
+    })();
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try { await fetch('/api/auth/logout', { method: 'POST', headers: API.headers() }); } catch (_) {}
+        localStorage.removeItem('aw_token');
+        window.location.href = '/login';
+    });
+
+    // Nav toggle
+    const navToggle = document.querySelector('.nav-toggle');
+    const navLinks = document.getElementById('nav-links');
+    if (navToggle && navLinks) {
+        navToggle.addEventListener('click', () => {
+            const open = navToggle.getAttribute('aria-expanded') === 'true';
+            navToggle.setAttribute('aria-expanded', String(!open));
+            navLinks.classList.toggle('open', !open);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Admin logic
+    // -------------------------------------------------------------------------
+    const PAGE_SIZE = 50;
+    let currentPage = 0;
+    let hasMore = false;
+
+    function showError(msg) {
+        const el = document.getElementById('admin-error');
+        el.textContent = msg;
+        el.hidden = false;
+    }
+
+    function clearError() {
+        const el = document.getElementById('admin-error');
+        el.textContent = '';
+        el.hidden = true;
+    }
+
+    async function loadStats() {
+        try {
+            const res = await fetch('/api/admin/stats', { headers: API.headers() });
+            if (res.status === 403) { window.location.href = '/dashboard'; return; }
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            if (!res.ok) throw new Error('Failed to load stats');
+            const data = await res.json();
+            document.getElementById('stat-users').textContent = data.total_users.toLocaleString();
+            document.getElementById('stat-sites').textContent = data.total_sites.toLocaleString();
+            document.getElementById('stat-scans').textContent = data.total_scans.toLocaleString();
+            document.getElementById('stat-today').textContent = data.scans_today.toLocaleString();
+        } catch (err) {
+            showError('Could not load system statistics.');
+        }
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatDate(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function renderUserRow(u) {
+        const badges = [];
+        if (u.is_admin) badges.push('<span class="badge badge-admin">admin</span>');
+        if (u.is_banned) badges.push('<span class="badge badge-banned">banned</span>');
+        if (!u.email_verified) badges.push('<span class="badge badge-free">unverified</span>');
+
+        const planBadge = `<span class="badge badge-plan">${escapeHtml(u.plan)}</span>`;
+
+        const banBtn = u.is_banned
+            ? `<button class="action-btn action-unban" data-action="unban" data-id="${u.id}" aria-label="Unban ${escapeHtml(u.email)}">Unban</button>`
+            : `<button class="action-btn action-ban" data-action="ban" data-id="${u.id}" aria-label="Ban ${escapeHtml(u.email)}">Ban</button>`;
+
+        const adminBtn = u.is_admin
+            ? `<button class="action-btn action-admin" data-action="toggle-admin" data-id="${u.id}" aria-label="Demote ${escapeHtml(u.email)} from admin">Demote</button>`
+            : `<button class="action-btn action-admin" data-action="toggle-admin" data-id="${u.id}" aria-label="Promote ${escapeHtml(u.email)} to admin">Promote</button>`;
+
+        return `<tr>
+            <td>${u.id}</td>
+            <td><span title="${escapeHtml(u.email)}">${escapeHtml(u.email)}</span></td>
+            <td>${planBadge}</td>
+            <td>${u.site_count}</td>
+            <td>${u.scan_count}</td>
+            <td>${formatDate(u.created_at)}</td>
+            <td>${badges.join(' ') || '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="white-space:nowrap;">${banBtn} ${adminBtn}</td>
+        </tr>`;
+    }
+
+    async function loadUsers() {
+        const search = document.getElementById('user-search').value.trim();
+        const bannedOnly = document.getElementById('filter-banned').checked;
+        const adminOnly = document.getElementById('filter-admin').checked;
+        const offset = currentPage * PAGE_SIZE;
+
+        const params = new URLSearchParams({ limit: PAGE_SIZE + 1, offset });
+        if (search) params.set('search', search);
+        if (bannedOnly) params.set('banned_only', 'true');
+        if (adminOnly) params.set('admin_only', 'true');
+
+        const tbody = document.getElementById('user-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">Loading…</td></tr>';
+        clearError();
+
+        try {
+            const res = await fetch(`/api/admin/users?${params}`, { headers: API.headers() });
+            if (!res.ok) throw new Error(await res.text());
+            const users = await res.json();
+            hasMore = users.length > PAGE_SIZE;
+            const display = hasMore ? users.slice(0, PAGE_SIZE) : users;
+
+            if (display.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">No users found.</td></tr>';
+            } else {
+                tbody.innerHTML = display.map(renderUserRow).join('');
+            }
+
+            document.getElementById('prev-btn').disabled = currentPage === 0;
+            document.getElementById('next-btn').disabled = !hasMore;
+            document.getElementById('page-info').textContent = `Page ${currentPage + 1}`;
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">Error loading users.</td></tr>';
+            showError('Could not load user list: ' + err.message);
+        }
+    }
+
+    async function handleAction(action, userId) {
+        const endpoints = {
+            ban: `/api/admin/users/${userId}/ban`,
+            unban: `/api/admin/users/${userId}/unban`,
+            'toggle-admin': `/api/admin/users/${userId}/toggle-admin`,
+        };
+        const url = endpoints[action];
+        if (!url) return;
+
+        const labels = { ban: 'Ban', unban: 'Unban', 'toggle-admin': 'Toggle admin' };
+        if (!confirm(`${labels[action]} user #${userId}?`)) return;
+
+        try {
+            const res = await fetch(url, { method: 'POST', headers: API.headers() });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Action failed');
+            // Re-render user list to reflect changes
+            await loadUsers();
+        } catch (err) {
+            showError(err.message);
+        }
+    }
+
+    // Event delegation for action buttons
+    document.getElementById('user-tbody').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        handleAction(btn.dataset.action, parseInt(btn.dataset.id, 10));
+    });
+
+    document.getElementById('search-btn').addEventListener('click', () => {
+        currentPage = 0;
+        loadUsers();
+    });
+
+    document.getElementById('user-search').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { currentPage = 0; loadUsers(); }
+    });
+
+    document.getElementById('filter-banned').addEventListener('change', () => { currentPage = 0; loadUsers(); });
+    document.getElementById('filter-admin').addEventListener('change', () => { currentPage = 0; loadUsers(); });
+
+    document.getElementById('prev-btn').addEventListener('click', () => {
+        if (currentPage > 0) { currentPage--; loadUsers(); }
+    });
+    document.getElementById('next-btn').addEventListener('click', () => {
+        if (hasMore) { currentPage++; loadUsers(); }
+    });
+
+    // Bootstrap
+    (async () => {
+        if (!API.token) { window.location.href = '/login'; return; }
+        await loadStats();
+        await loadUsers();
+    })();
+    </script>
+</body>
+</html>

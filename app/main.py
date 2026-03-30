@@ -19,7 +19,7 @@ from app.errors import http_exception_handler as _http_exc_handler, unhandled_ex
 from app.limiter import limiter
 from app.logging_config import configure_logging
 from app.request_id import RequestIDMiddleware
-from app.routers import auth_router, audit_router, backup_router, billing_router, health_router, scan_router, api_keys_router, webhooks_router, notifications_router
+from app.routers import admin_router, auth_router, audit_router, backup_router, billing_router, health_router, scan_router, api_keys_router, webhooks_router, notifications_router
 from app.scheduler import start_scheduler, stop_scheduler
 from app.security_headers import SecurityHeadersMiddleware
 
@@ -154,6 +154,7 @@ app.include_router(api_keys_router.router)
 app.include_router(webhooks_router.router)
 app.include_router(notifications_router.router)
 app.include_router(backup_router.router)
+app.include_router(admin_router.router)
 
 # Instrument all HTTP endpoints and expose /metrics in Prometheus text format.
 # The instrumentator collects: request count, request duration, response size,
@@ -235,3 +236,8 @@ async def shared_report_page(request: Request, token: str):
 @app.get("/api-reference", response_class=HTMLResponse, include_in_schema=False)
 async def api_reference_page(request: Request):
     return templates.TemplateResponse("api_reference.html", {"request": request})
+
+
+@app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+async def admin_page(request: Request):
+    return templates.TemplateResponse("admin.html", {"request": request})

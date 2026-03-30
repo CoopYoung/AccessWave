@@ -755,6 +755,11 @@ async function checkEmailVerified() {
             }
             document.getElementById('resend-verify-btn')?.addEventListener('click', resendVerificationEmail);
         }
+        // Show admin nav link for admin users
+        if (me && me.is_admin) {
+            const adminLink = document.getElementById('admin-link');
+            if (adminLink) adminLink.hidden = false;
+        }
     } catch (_) {
         // non-critical — ignore
     }

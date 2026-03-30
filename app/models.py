@@ -29,6 +29,10 @@ class User(Base):
     locked_until = Column(DateTime, nullable=True)
     # Token revocation: incrementing this invalidates all existing JWTs
     token_version = Column(Integer, default=0, nullable=False, server_default="0")
+    # Admin flag — grants access to /admin dashboard and admin API endpoints
+    is_admin = Column(Boolean, default=False, nullable=False, server_default="0")
+    # Banned users cannot log in or use the API
+    is_banned = Column(Boolean, default=False, nullable=False, server_default="0")
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")

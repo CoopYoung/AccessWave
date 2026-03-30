@@ -80,6 +80,7 @@ class UserOut(BaseModel):
     email: str
     plan: str
     email_verified: bool
+    is_admin: bool = False
     created_at: datetime.datetime
 
     class Config:
