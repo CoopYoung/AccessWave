@@ -10,7 +10,8 @@ import json
 import html as _html
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 from pydantic import BaseModel, HttpUrl, field_validator
 from sqlalchemy import case, func, nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
