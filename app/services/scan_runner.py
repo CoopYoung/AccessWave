@@ -18,8 +18,9 @@ from app.metrics import (
     SCAN_PAGES_SCANNED,
     SCAN_SCORE,
 )
-from app.models import Issue, Scan, Site, Webhook
+from app.models import Issue, Scan, Site, User, Webhook
 from app.services.crawler import crawl_site
+from app.services.email_service import send_scan_completed, send_scan_failed
 from app.services.scan_progress import clear_progress, update_progress
 from app.services.scanner import IssueFound, calculate_score, scan_html
 from app.services.webhook_sender import fire_event
@@ -142,6 +143,26 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
                 "minor_count": scan.minor_count,
             })
 
+            # Send email notification if the owner has opted in
+            try:
+                owner_result = await db.execute(select(User).where(User.id == site.user_id))
+                owner = owner_result.scalar_one_or_none()
+                if owner and owner.email_notify_on_complete:
+                    await send_scan_completed(
+                        to_address=owner.email,
+                        site_name=site.name,
+                        site_url=site.url,
+                        scan_id=scan.id,
+                        score=scan.score,
+                        pages_scanned=scan.pages_scanned,
+                        total_issues=scan.total_issues,
+                        critical_count=scan.critical_count,
+                        serious_count=scan.serious_count,
+                        score_threshold=owner.email_score_threshold,
+                    )
+            except Exception:
+                pass  # Never let email errors mask the scan result
+
         except Exception as e:
             logger.error("scan_failed", scan_id=scan.id, site_id=scan.site_id, error=str(e), exc_info=True)
             scan.status = "failed"
@@ -164,6 +185,21 @@ async def run_scan(scan_id: int, max_pages: int = 5) -> None:
                 })
             except Exception:
                 pass  # Never let webhook errors mask the original failure
+
+            # Send failure email notification if the owner has opted in
+            try:
+                owner_result = await db.execute(select(User).where(User.id == site.user_id))
+                owner = owner_result.scalar_one_or_none()
+                if owner and owner.email_notify_on_failure:
+                    await send_scan_failed(
+                        to_address=owner.email,
+                        site_name=site.name,
+                        site_url=site.url,
+                        scan_id=scan.id,
+                        error=str(e),
+                    )
+            except Exception:
+                pass  # Never let email errors mask the original failure
 
         finally:
             ACTIVE_SCANS.dec()

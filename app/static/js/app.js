@@ -1799,7 +1799,16 @@ async function initSettings() {
     });
     importBtn?.addEventListener('click', importData);
 
+    // Email notifications
+    document.getElementById('notifications-form')?.addEventListener('submit', saveNotificationPrefs);
+    document.getElementById('clear-threshold-btn')?.addEventListener('click', () => {
+        const input = document.getElementById('score-threshold');
+        if (input) input.value = '';
+    });
+    document.getElementById('test-email-btn')?.addEventListener('click', sendTestEmail);
+
     await loadProfile();
+    await loadNotificationPrefs();
 }
 
 async function exportData() {
@@ -1961,6 +1970,61 @@ function hideBanner(el) {
     if (!el) return;
     el.hidden = true;
     el.textContent = '';
+}
+
+async function loadNotificationPrefs() {
+    try {
+        const prefs = await API.req('GET', '/notifications');
+        if (!prefs) return;
+        const onComplete = document.getElementById('notify-complete');
+        const onFailure = document.getElementById('notify-failure');
+        const threshold = document.getElementById('score-threshold');
+        const smtpNotice = document.getElementById('smtp-disabled-notice');
+        if (onComplete) onComplete.checked = prefs.email_notify_on_complete;
+        if (onFailure) onFailure.checked = prefs.email_notify_on_failure;
+        if (threshold) threshold.value = prefs.email_score_threshold != null ? prefs.email_score_threshold : '';
+        if (smtpNotice) smtpNotice.hidden = prefs.email_enabled;
+    } catch (e) { console.error('loadNotificationPrefs', e); }
+}
+
+async function saveNotificationPrefs(e) {
+    e.preventDefault();
+    const banner = document.getElementById('notifications-banner');
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    hideBanner(banner);
+    try {
+        const thresholdVal = document.getElementById('score-threshold').value.trim();
+        const body = {
+            email_notify_on_complete: document.getElementById('notify-complete').checked,
+            email_notify_on_failure: document.getElementById('notify-failure').checked,
+            clear_threshold: thresholdVal === '',
+        };
+        if (thresholdVal !== '') body.email_score_threshold = parseFloat(thresholdVal);
+        await API.req('PATCH', '/notifications', body);
+        showBanner(banner, 'Notification settings saved.', 'success');
+        showToast('Notification settings saved');
+    } catch (err) {
+        showBanner(banner, err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function sendTestEmail() {
+    const statusEl = document.getElementById('test-email-status');
+    const btn = document.getElementById('test-email-btn');
+    btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Sending\u2026';
+    try {
+        await API.req('POST', '/notifications/test');
+        if (statusEl) { statusEl.style.color = 'var(--success)'; statusEl.textContent = 'Test email sent!'; }
+        showToast('Test email sent');
+    } catch (err) {
+        if (statusEl) { statusEl.style.color = 'var(--error)'; statusEl.textContent = err.message; }
+    } finally {
+        btn.disabled = false;
+    }
 }
 
 // Share

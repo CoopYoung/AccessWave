@@ -84,5 +84,21 @@ class Settings:
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
+    # Email notifications (SMTP)
+    # Leave SMTP_HOST blank to disable email delivery entirely.
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    # Use STARTTLS on port 587 (default). Set SMTP_USE_TLS=true for SSL on 465.
+    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
+    SMTP_FROM_ADDRESS: str = os.getenv("SMTP_FROM_ADDRESS", "noreply@accesswave.app")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "AccessWave")
+
+    @property
+    def email_enabled(self) -> bool:
+        """True when SMTP_HOST is configured."""
+        return bool(self.SMTP_HOST)
+
 
 settings = Settings()
