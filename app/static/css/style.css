@@ -130,7 +130,8 @@ footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: cente
 
 /* Issue search/filter bar */
 .issue-search-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
-.issue-search-field { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 180px; }
+.issue-search-field { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 150px; }
+.issue-search-field--wide { flex: 2; min-width: 220px; }
 .issue-search-input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.88rem; font-family: inherit; width: 100%; }
 .issue-search-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
 .issue-page-select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.88rem; font-family: inherit; width: 100%; height: 34px; }

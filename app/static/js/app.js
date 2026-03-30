@@ -1532,14 +1532,43 @@ async function openScan(scanId) {
             ${issues.length ? (() => {
                 const pageUrls = [...new Set(issues.map(i => i.page_url))].sort();
                 const pageOptions = pageUrls.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+                const severityCounts = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+                issues.forEach(i => { if (severityCounts[i.severity] !== undefined) severityCounts[i.severity]++; });
+                const principleSet = new Set();
+                issues.forEach(i => {
+                    const p = i.wcag_criteria && WCAG_CRITERIA[i.wcag_criteria]?.principle;
+                    if (p) principleSet.add(p);
+                });
+                const principleOrder = ['Perceivable', 'Operable', 'Understandable', 'Robust'];
+                const principleOptions = principleOrder.filter(p => principleSet.has(p))
+                    .map(p => `<option value="${p}">${p}</option>`).join('');
                 return `<div class="issue-search-bar" role="search" aria-label="Filter issues">
-                    <div class="issue-search-field">
+                    <div class="issue-search-field issue-search-field--wide">
                         <label for="issue-search-input" class="sr-only">Search issues</label>
                         <input type="search" id="issue-search-input" class="issue-search-input"
                             placeholder="Search by rule, message, WCAG criteria&hellip;"
                             aria-label="Search issues by rule ID, message, or WCAG criteria"
                             oninput="renderFilteredIssues()">
                     </div>
+                    <div class="issue-search-field">
+                        <label for="issue-severity-filter" class="sr-only">Filter by severity</label>
+                        <select id="issue-severity-filter" class="issue-page-select"
+                            aria-label="Filter issues by severity"
+                            onchange="renderFilteredIssues()">
+                            <option value="">All severities</option>
+                            ${['critical','serious','moderate','minor'].filter(s => severityCounts[s] > 0)
+                                .map(s => `<option value="${s}">${s[0].toUpperCase()+s.slice(1)} (${severityCounts[s]})</option>`).join('')}
+                        </select>
+                    </div>
+                    ${principleOptions ? `<div class="issue-search-field">
+                        <label for="issue-principle-filter" class="sr-only">Filter by WCAG principle</label>
+                        <select id="issue-principle-filter" class="issue-page-select"
+                            aria-label="Filter issues by WCAG principle"
+                            onchange="renderFilteredIssues()">
+                            <option value="">All principles</option>
+                            ${principleOptions}
+                        </select>
+                    </div>` : ''}
                     <div class="issue-search-field">
                         <label for="issue-page-filter" class="sr-only">Filter by page</label>
                         <select id="issue-page-filter" class="issue-page-select"
@@ -1588,15 +1617,22 @@ function renderFilteredIssues() {
     if (!container) return;
     const q = (document.getElementById('issue-search-input')?.value || '').toLowerCase().trim();
     const pageFilter = document.getElementById('issue-page-filter')?.value || '';
+    const severityFilter = document.getElementById('issue-severity-filter')?.value || '';
+    const principleFilter = document.getElementById('issue-principle-filter')?.value || '';
     const clearBtn = document.getElementById('issue-search-clear');
     const statusEl = document.getElementById('issue-search-status');
     const countLabel = document.getElementById('issues-count-label');
-    const hasFilter = q || pageFilter;
+    const hasFilter = q || pageFilter || severityFilter || principleFilter;
     if (clearBtn) clearBtn.hidden = !hasFilter;
 
     const SEVERITIES = ['critical', 'serious', 'moderate', 'minor'];
     const filtered = currentIssues.filter(i => {
         if (pageFilter && i.page_url !== pageFilter) return false;
+        if (severityFilter && i.severity !== severityFilter) return false;
+        if (principleFilter) {
+            const principle = i.wcag_criteria && WCAG_CRITERIA[i.wcag_criteria]?.principle;
+            if (principle !== principleFilter) return false;
+        }
         if (!q) return true;
         return (i.rule_id || '').toLowerCase().includes(q) ||
                (i.message || '').toLowerCase().includes(q) ||
@@ -1660,9 +1696,13 @@ function renderFilteredIssues() {
 
 function clearIssueSearch() {
     const inp = document.getElementById('issue-search-input');
-    const sel = document.getElementById('issue-page-filter');
+    const pageSel = document.getElementById('issue-page-filter');
+    const sevSel = document.getElementById('issue-severity-filter');
+    const prinSel = document.getElementById('issue-principle-filter');
     if (inp) inp.value = '';
-    if (sel) sel.value = '';
+    if (pageSel) pageSel.value = '';
+    if (sevSel) sevSel.value = '';
+    if (prinSel) prinSel.value = '';
     renderFilteredIssues();
     inp?.focus();
 }
