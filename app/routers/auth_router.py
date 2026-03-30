@@ -148,7 +148,7 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
         token = create_email_verify_token(user.id, user.email)
         verify_url = f"{settings.BASE_URL}/verify-email?token={token}"
         await send_verification_email(to_address=user.email, verify_url=verify_url)
-    return TokenResponse(access_token=create_access_token(user.id))
+    return TokenResponse(access_token=create_access_token(user.id, user.token_version or 0))
 
 
 @router.post(
@@ -219,7 +219,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
     AUTH_ATTEMPTS.labels(endpoint="login", outcome="success").inc()
     await log_action(db, action="login.success", user_id=user.id, request=request)
     await db.commit()
-    return LoginResponse(access_token=create_access_token(user.id))
+    return LoginResponse(access_token=create_access_token(user.id, user.token_version or 0))
 
 
 @router.post(
@@ -263,7 +263,7 @@ async def login_totp(
     await log_action(db, action="login.success", user_id=user.id, request=request,
                      extra={"method": "2fa"})
     await db.commit()
-    return TokenResponse(access_token=create_access_token(user.id))
+    return TokenResponse(access_token=create_access_token(user.id, user.token_version or 0))
 
 
 @router.get("/me", response_model=UserOut, summary="Get current user")
@@ -547,3 +547,47 @@ async def disable_2fa(
 )
 async def get_2fa_status(user: User = Depends(get_current_user)):
     return {"totp_enabled": user.totp_enabled}
+
+
+@router.post(
+    "/logout",
+    status_code=200,
+    summary="Log out",
+    description=(
+        "Invalidate the current JWT by incrementing the user's token_version. "
+        "The token is still syntactically valid but will be rejected on all "
+        "subsequent requests. The client should discard the token."
+    ),
+)
+async def logout(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.token_version = (user.token_version or 0) + 1
+    await log_action(db, action="auth.logout", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("user_logout", user_id=user.id)
+    return {"ok": True, "message": "Logged out successfully"}
+
+
+@router.post(
+    "/logout-all",
+    status_code=200,
+    summary="Sign out of all devices",
+    description=(
+        "Invalidate all active JWTs for this account by incrementing token_version. "
+        "Every device or API client using a token for this account will be signed out "
+        "immediately. A new token can be obtained by logging in again."
+    ),
+)
+async def logout_all(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.token_version = (user.token_version or 0) + 1
+    await log_action(db, action="auth.logout_all", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("user_logout_all", user_id=user.id)
+    return {"ok": True, "message": "All sessions have been revoked"}

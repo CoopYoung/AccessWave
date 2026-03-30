@@ -27,6 +27,8 @@ class User(Base):
     # Account lockout after repeated failed logins
     failed_login_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     locked_until = Column(DateTime, nullable=True)
+    # Token revocation: incrementing this invalidates all existing JWTs
+    token_version = Column(Integer, default=0, nullable=False, server_default="0")
     sites = relationship("Site", back_populates="owner", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")

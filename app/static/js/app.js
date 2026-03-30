@@ -67,14 +67,27 @@ const API = {
         const opts = { method, headers: h };
         if (body) opts.body = JSON.stringify(body);
         const res = await fetch(`/api${path}`, opts);
-        if (res.status === 401) { this.logout(); return null; }
+        if (res.status === 401 && path !== '/auth/logout') { this.logout(); return null; }
         if (res.status === 204) return null;
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Request failed');
         return data;
     },
     setToken(t) { this.token = t; localStorage.setItem('aw_token', t); },
-    logout() { this.token = null; localStorage.removeItem('aw_token'); window.location.href = '/login'; },
+    async logout(redirectUrl = '/login') {
+        // Tell the server to revoke the current token before discarding it locally
+        if (this.token) {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+                });
+            } catch (_) { /* best-effort — clear locally regardless */ }
+        }
+        this.token = null;
+        localStorage.removeItem('aw_token');
+        window.location.href = redirectUrl;
+    },
     isLoggedIn() { return !!this.token; }
 };
 
@@ -1962,6 +1975,7 @@ function _renderSeverityChart(totals) {
 async function initSettings() {
     if (!API.isLoggedIn()) { window.location.href = '/login'; return; }
     document.getElementById('logout-btn')?.addEventListener('click', () => API.logout());
+    document.getElementById('logout-all-btn')?.addEventListener('click', logoutAllDevices);
     document.getElementById('open-delete-modal')?.addEventListener('click', openDeleteModal);
     document.getElementById('close-delete-modal')?.addEventListener('click', closeDeleteModal);
     document.getElementById('delete-modal')?.addEventListener('click', (e) => {
@@ -2260,6 +2274,23 @@ function closeDeleteModal() {
     document.getElementById('delete-modal').classList.remove('active');
     document.getElementById('delete-form')?.reset();
     hideBanner(document.getElementById('delete-banner'));
+}
+
+async function logoutAllDevices() {
+    const btn = document.getElementById('logout-all-btn');
+    const banner = document.getElementById('logout-all-banner');
+    if (btn) btn.disabled = true;
+    if (banner) banner.hidden = true;
+    try {
+        await API.req('POST', '/auth/logout-all');
+        // Redirect to login — the token is now invalid
+        API.token = null;
+        localStorage.removeItem('aw_token');
+        window.location.href = '/login?msg=signed-out-all';
+    } catch (err) {
+        if (banner) { banner.textContent = err.message || 'Failed to sign out'; banner.className = 'settings-banner error'; banner.hidden = false; }
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function deleteAccount(e) {
