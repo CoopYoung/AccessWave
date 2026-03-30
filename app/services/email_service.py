@@ -345,6 +345,68 @@ async def send_password_reset(to_address: str, reset_url: str) -> bool:
     return await _send(to_address, "[AccessWave] Reset your password", html, text)
 
 
+async def send_verification_email(to_address: str, verify_url: str) -> bool:
+    """Send an email-address verification email with a one-time link (expires 24 h)."""
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Verify your email \u2013 AccessWave</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;">
+    <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden;max-width:600px;">
+        <tr>
+          <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 40px;text-align:center;">
+            <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">AccessWave</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,.8);font-size:14px;">WCAG 2.1 Accessibility Scanner</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <h2 style="margin:0 0 12px;color:#0f172a;font-size:20px;font-weight:600;">Verify your email address</h2>
+            <p style="margin:0 0 24px;color:#64748b;font-size:15px;">
+              Thanks for signing up! Click the button below to verify your email address
+              and unlock all AccessWave features. This link expires in
+              <strong style="color:#0f172a;">24\u00a0hours</strong>.
+            </p>
+            <div style="text-align:center;margin-bottom:32px;">
+              <a href="{verify_url}"
+                 style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;
+                        font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px;">
+                Verify email address
+              </a>
+            </div>
+            <p style="margin:0;color:#94a3b8;font-size:13px;">
+              If you didn't create an AccessWave account, you can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+            <p style="margin:0;color:#94a3b8;font-size:12px;">
+              Having trouble with the button? Copy and paste this link into your browser:<br>
+              <a href="{verify_url}" style="color:#6366f1;word-break:break-all;">{verify_url}</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    text = (
+        "Verify your AccessWave email address\n\n"
+        "Click the link below to verify your email (expires in 24 hours):\n"
+        f"{verify_url}\n\n"
+        "If you didn't create an AccessWave account, you can safely ignore this email.\n"
+    )
+    return await _send(to_address, "[AccessWave] Verify your email address", html, text)
+
+
 async def send_scan_failed(
     to_address: str,
     site_name: str,

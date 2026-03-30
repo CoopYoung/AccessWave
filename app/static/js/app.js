@@ -702,9 +702,47 @@ async function initDashboard() {
             <button class="btn-bulk btn-bulk-cancel" onclick="clearSelection()">Cancel</button>`;
         document.body.appendChild(tb);
     }
+    // Show email-verification banner if the account is unverified
+    checkEmailVerified();
+
     await loadStats();
     await Promise.all([loadSites(), loadCharts(), loadActivityHeatmap()]);
     initWcagPanel();
+}
+
+async function checkEmailVerified() {
+    try {
+        const me = await API.req('GET', '/auth/me');
+        if (me && me.email_verified === false) {
+            const banner = document.getElementById('email-verify-banner');
+            if (banner) {
+                banner.hidden = false;
+                banner.style.display = 'flex';
+            }
+            document.getElementById('resend-verify-btn')?.addEventListener('click', resendVerificationEmail);
+        }
+    } catch (_) {
+        // non-critical — ignore
+    }
+}
+
+async function resendVerificationEmail() {
+    const btn = document.getElementById('resend-verify-btn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending\u2026';
+    try {
+        await API.req('POST', '/auth/verify-email/send');
+        btn.textContent = 'Email sent!';
+        setTimeout(() => {
+            btn.textContent = origText;
+            btn.disabled = false;
+        }, 4000);
+    } catch (err) {
+        btn.textContent = origText;
+        btn.disabled = false;
+        showToast(err.message || 'Failed to send verification email', 'error');
+    }
 }
 
 function setStatVal(id, val) {

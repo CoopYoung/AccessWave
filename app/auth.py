@@ -36,6 +36,20 @@ def create_pre_auth_token(user_id: int) -> str:
     )
 
 
+def create_email_verify_token(user_id: int, email: str) -> str:
+    """Create a 24-hour email-verification JWT.
+
+    The email is embedded as a fingerprint so the token is invalidated if the
+    user changes their email address before verifying.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    return jwt.encode(
+        {"sub": str(user_id), "email": email, "type": "email_verify", "exp": expire},
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+
 def create_password_reset_token(user_id: int, hashed_password: str) -> str:
     """Create a 15-minute password-reset JWT.
 

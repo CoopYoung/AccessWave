@@ -205,6 +205,11 @@ async def reset_password_page(request: Request, token: str = ""):
     return templates.TemplateResponse("reset_password.html", {"request": request, "token": token})
 
 
+@app.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_page(request: Request, token: str = ""):
+    return templates.TemplateResponse("verify_email.html", {"request": request, "token": token})
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})

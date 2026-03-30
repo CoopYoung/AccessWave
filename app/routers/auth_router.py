@@ -9,7 +9,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import log_action
-from app.auth import create_access_token, create_pre_auth_token, create_password_reset_token, get_current_user, hash_password, verify_password
+from app.auth import create_access_token, create_email_verify_token, create_pre_auth_token, create_password_reset_token, get_current_user, hash_password, verify_password
 from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
@@ -78,6 +78,7 @@ class UserOut(BaseModel):
     id: int
     email: str
     plan: str
+    email_verified: bool
     created_at: datetime.datetime
 
     class Config:
@@ -141,6 +142,11 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     await db.refresh(user)
     logger.info("user_registered", user_id=user.id, email=user.email)
     AUTH_ATTEMPTS.labels(endpoint="register", outcome="success").inc()
+    if settings.email_enabled:
+        from app.services.email_service import send_verification_email
+        token = create_email_verify_token(user.id, user.email)
+        verify_url = f"{settings.BASE_URL}/verify-email?token={token}"
+        await send_verification_email(to_address=user.email, verify_url=verify_url)
     return TokenResponse(access_token=create_access_token(user.id))
 
 
@@ -285,6 +291,71 @@ async def delete_account(
     await db.flush()
     await db.delete(user)
     await db.commit()
+
+
+@router.post(
+    "/verify-email",
+    status_code=200,
+    summary="Verify email address",
+    description="Mark the account's email as verified using the token from the verification email.",
+)
+@limiter.limit("10/minute")
+async def verify_email(
+    request: Request,
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if payload.get("type") != "email_verify":
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    try:
+        user_id = int(payload["sub"])
+        token_email = payload["email"]
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if user.email != token_email:
+        raise HTTPException(status_code=400, detail="This link is no longer valid — your email has changed")
+    if user.email_verified:
+        return {"ok": True, "message": "Email already verified."}
+    user.email_verified = True
+    await log_action(db, action="email.verified", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("email_verified", user_id=user.id)
+    return {"ok": True, "message": "Email address verified successfully."}
+
+
+@router.post(
+    "/verify-email/send",
+    status_code=200,
+    summary="Resend verification email",
+    description="Send (or resend) the email verification link to the authenticated user.",
+)
+@limiter.limit("3/minute")
+async def resend_verification_email(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.email_verified:
+        return {"ok": True, "message": "Email is already verified."}
+    if not settings.email_enabled:
+        raise HTTPException(status_code=503, detail="Email delivery is not configured")
+    from app.services.email_service import send_verification_email
+    token = create_email_verify_token(user.id, user.email)
+    verify_url = f"{settings.BASE_URL}/verify-email?token={token}"
+    await send_verification_email(to_address=user.email, verify_url=verify_url)
+    await log_action(db, action="email.verify_resent", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("verification_email_resent", user_id=user.id)
+    return {"ok": True, "message": "Verification email sent. Please check your inbox."}
 
 
 @router.post(

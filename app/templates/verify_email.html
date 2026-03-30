@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify email - AccessWave</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
+        <a href="/" class="logo">Access<span>Wave</span></a>
+        <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
+            <a href="/login" class="btn btn-outline btn-sm">Log in</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
+        </div>
+    </div></nav>
+
+    <main id="main-content">
+    <div class="auth-page"><div class="auth-card">
+        <h2>Verify your email</h2>
+
+        <div id="loading-msg" role="status" aria-live="polite" style="color:var(--text-muted);text-align:center;">
+            <p>Verifying your email address&hellip;</p>
+        </div>
+
+        <div id="success-msg" class="success-banner" role="status" aria-live="polite" hidden>
+            <strong>Email verified!</strong> Your account is now fully active.
+        </div>
+
+        <div id="already-msg" class="success-banner" role="status" aria-live="polite" hidden>
+            Your email address is already verified.
+        </div>
+
+        <div id="error-msg" hidden>
+            <p class="error-msg" style="display:block;">
+                This verification link is invalid or has expired.
+                Verification links are valid for 24 hours.
+            </p>
+            <p style="margin-top:16px;text-align:center;">
+                <a href="/login" class="btn btn-outline">Go to log in</a>
+            </p>
+        </div>
+
+        <div id="no-token-msg" hidden>
+            <p style="color:var(--text-muted);margin-bottom:16px;">
+                No verification token found. Please use the link from your verification email,
+                or log in and request a new verification email from your account settings.
+            </p>
+            <p style="text-align:center;">
+                <a href="/login" class="btn btn-outline">Go to log in</a>
+            </p>
+        </div>
+
+        <div id="redirect-msg" hidden style="text-align:center;">
+            <p style="color:var(--text-muted);margin-top:16px;">
+                Redirecting to your dashboard&hellip;
+            </p>
+            <a href="/dashboard" class="btn btn-primary" style="margin-top:8px;">Go to dashboard</a>
+        </div>
+    </div></div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    initDarkMode();
+    (function () {
+        const verifyToken = "{{ token | e }}";
+        const loadingEl = document.getElementById('loading-msg');
+        const successEl = document.getElementById('success-msg');
+        const alreadyEl = document.getElementById('already-msg');
+        const errorEl   = document.getElementById('error-msg');
+        const noTokenEl = document.getElementById('no-token-msg');
+        const redirectEl = document.getElementById('redirect-msg');
+
+        function showOnly(el) {
+            loadingEl.hidden = true;
+            [successEl, alreadyEl, errorEl, noTokenEl].forEach(function(e) { e.hidden = true; });
+            el.hidden = false;
+        }
+
+        if (!verifyToken) {
+            showOnly(noTokenEl);
+            return;
+        }
+
+        fetch('/api/auth/verify-email?token=' + encodeURIComponent(verifyToken), { method: 'POST' })
+            .then(function(resp) { return resp.json().then(function(data) { return { ok: resp.ok, data: data }; }); })
+            .then(function(result) {
+                if (result.ok) {
+                    if (result.data.message && result.data.message.indexOf('already') !== -1) {
+                        showOnly(alreadyEl);
+                    } else {
+                        showOnly(successEl);
+                    }
+                    redirectEl.hidden = false;
+                    setTimeout(function() { window.location.href = '/dashboard'; }, 3000);
+                } else {
+                    showOnly(errorEl);
+                }
+            })
+            .catch(function() {
+                showOnly(errorEl);
+            });
+    })();
+    </script>
+</body>
+</html>

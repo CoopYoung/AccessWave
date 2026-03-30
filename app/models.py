@@ -19,6 +19,8 @@ class User(Base):
     email_notify_on_failure = Column(Boolean, default=False, nullable=False, server_default="0")
     # Notify when score drops at or below this threshold (null = disabled)
     email_score_threshold = Column(Float, nullable=True)
+    # Email verification
+    email_verified = Column(Boolean, default=False, nullable=False, server_default="0")
     # TOTP-based two-factor authentication
     totp_secret = Column(String(64), nullable=True)    # base32 TOTP secret
     totp_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
