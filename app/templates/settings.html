@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Account Settings - AccessWave</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>(function(){var t=localStorage.getItem('aw_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
 </head>
 <body>
-    <nav><div class="container">
+    <a href="#settings-root" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <div class="links">
             <a href="/dashboard">Dashboard</a>
             <a href="#" id="logout-btn">Log out</a>
+            <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
         </div>
     </div></nav>
 
@@ -320,6 +323,6 @@
     </div>
 
     <script src="/static/js/app.js"></script>
-    <script>initSettings();</script>
+    <script>initDarkMode(); initSettings();</script>
 </body>
 </html>

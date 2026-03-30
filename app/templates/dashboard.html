@@ -16,7 +16,7 @@
         <button class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation" aria-controls="nav-links">
             <span></span><span></span><span></span>
         </button>
-        <div class="links" id="nav-links" role="navigation" aria-label="Main navigation">
+        <div class="links" id="nav-links">
             <a href="#" onclick="upgradePlan('pro')">Upgrade</a>
             <a href="/api-reference">API Docs</a>
             <a href="/settings">Settings</a>
@@ -112,7 +112,7 @@
     </div>
 
     <!-- Edit Site Modal -->
-    <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title" aria-hidden="true">
         <div class="modal">
             <h3 id="edit-modal-title">Edit Site</h3>
             <form id="edit-site-form">
@@ -149,7 +149,7 @@
     </div>
 
     <!-- Accessibility Badge Modal -->
-    <div id="badge-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="badge-modal-title">
+    <div id="badge-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="badge-modal-title" aria-hidden="true">
         <div class="modal">
             <h3 id="badge-modal-title">Accessibility Badge</h3>
             <p style="color:var(--text-muted);font-size:0.88rem;margin-bottom:16px">

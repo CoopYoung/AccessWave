@@ -8,7 +8,8 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav><div class="container">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <div class="links">
             <a href="/login">Log in</a>
@@ -23,7 +24,7 @@
             <p>We ran into an unexpected error on our end. Please try again in a moment, or head back to the home page.</p>
             <div class="error-actions">
                 <a href="/" class="btn btn-primary">Go to Home</a>
-                <button class="btn btn-outline" onclick="window.location.reload()">Try Again</button>
+                <button type="button" class="btn btn-outline" onclick="window.location.reload()">Try Again</button>
             </div>
         </div>
     </main>
