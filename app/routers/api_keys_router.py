@@ -3,11 +3,12 @@ import hashlib
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import log_action
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import ApiKey, User
@@ -62,6 +63,7 @@ async def list_api_keys(
 
 @router.post("", response_model=ApiKeyCreated, status_code=201)
 async def create_api_key(
+    request: Request,
     body: ApiKeyCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -90,6 +92,10 @@ async def create_api_key(
         expires_at=expires_at,
     )
     db.add(api_key)
+    await db.flush()
+    await log_action(db, action="api_key.created", user_id=user.id, request=request,
+                     resource_type="api_key", resource_id=api_key.id,
+                     extra={"name": body.name})
     await db.commit()
     await db.refresh(api_key)
 
@@ -106,6 +112,7 @@ async def create_api_key(
 
 @router.delete("/{key_id}", status_code=204)
 async def revoke_api_key(
+    request: Request,
     key_id: int,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -116,5 +123,8 @@ async def revoke_api_key(
     api_key = result.scalar_one_or_none()
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
+    await log_action(db, action="api_key.revoked", user_id=user.id, request=request,
+                     resource_type="api_key", resource_id=key_id,
+                     extra={"name": api_key.name})
     await db.delete(api_key)
     await db.commit()

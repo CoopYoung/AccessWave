@@ -101,3 +101,18 @@ class ApiKey(Base):
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     user = relationship("User", back_populates="api_keys")
+
+
+class AuditLog(Base):
+    """Immutable record of security-relevant user actions."""
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    # Nullable so failed logins (unknown user) can still be recorded
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    action = Column(String(64), nullable=False, index=True)   # e.g. "login.success"
+    resource_type = Column(String(32), nullable=True)         # e.g. "site", "scan"
+    resource_id = Column(Integer, nullable=True)
+    ip_address = Column(String(45), nullable=True)            # IPv4 or IPv6
+    user_agent = Column(String(256), nullable=True)
+    extra = Column(JSON, nullable=True)                       # arbitrary extra context
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)

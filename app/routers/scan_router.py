@@ -15,6 +15,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 from sqlalchemy import case, func, nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import log_action
 from app.auth import get_current_user
 from app.config import settings
 from app.database import async_session, get_db
@@ -241,6 +242,10 @@ async def create_site(request: Request, body: SiteCreate, user: User = Depends(g
         raise HTTPException(status_code=403, detail=f"Site limit ({plan['sites']}) reached. Upgrade your plan.")
     site = Site(user_id=user.id, name=body.name, url=str(body.url))
     db.add(site)
+    await db.flush()
+    await log_action(db, action="site.created", user_id=user.id, request=request,
+                     resource_type="site", resource_id=site.id,
+                     extra={"name": site.name, "url": site.url})
     await db.commit()
     await db.refresh(site)
     logger.info("site_created", user_id=user.id, site_id=site.id, site_url=site.url)
@@ -265,9 +270,12 @@ async def update_site(
 
 
 @router.delete("/sites/{site_id}", status_code=204, summary="Delete a site")
-async def delete_site(site_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_site(request: Request, site_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     site = await _get_user_site(site_id, user.id, db)
     logger.info("site_deleted", user_id=user.id, site_id=site.id, site_url=site.url)
+    await log_action(db, action="site.deleted", user_id=user.id, request=request,
+                     resource_type="site", resource_id=site.id,
+                     extra={"name": site.name, "url": site.url})
     await db.delete(site)
     await db.commit()
 
@@ -353,6 +361,10 @@ async def start_scan(
 
     scan = Scan(site_id=site.id)
     db.add(scan)
+    await db.flush()
+    await log_action(db, action="scan.triggered", user_id=user.id, request=request,
+                     resource_type="scan", resource_id=scan.id,
+                     extra={"site_id": site.id, "site_url": site.url})
     await db.commit()
     await db.refresh(scan)
     logger.info("scan_queued", user_id=user.id, site_id=site.id, scan_id=scan.id, max_pages=plan["pages_per_scan"])

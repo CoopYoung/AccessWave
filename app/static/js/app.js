@@ -1809,6 +1809,7 @@ async function initSettings() {
 
     await loadProfile();
     await loadNotificationPrefs();
+    initAuditLog();
 }
 
 async function exportData() {
@@ -2620,5 +2621,166 @@ function initWcagPanel() {
         if (e.key === 'Escape' && document.getElementById('wcag-panel')?.classList.contains('active')) {
             closeWcagPanel();
         }
+    });
+}
+
+// ─── Audit Log (Track A #19) ────────────────────────────────────────────────
+
+const _AUDIT_PAGE_SIZE = 25;
+let _auditOffset = 0;
+let _auditFilter = '';
+let _auditHasMore = false;
+
+const _AUDIT_ICONS = {
+    'login.success':    { icon: '✓', cls: 'audit-icon--success' },
+    'login.failure':    { icon: '✗', cls: 'audit-icon--danger'  },
+    'register.success': { icon: '★', cls: 'audit-icon--info'    },
+    'password.changed': { icon: '🔑', cls: 'audit-icon--info'   },
+    'profile.updated':  { icon: '✎', cls: 'audit-icon--info'    },
+    'account.deleted':  { icon: '✕', cls: 'audit-icon--danger'  },
+    'site.created':     { icon: '+', cls: 'audit-icon--success'  },
+    'site.deleted':     { icon: '−', cls: 'audit-icon--danger'  },
+    'scan.triggered':   { icon: '⟳', cls: 'audit-icon--info'    },
+    'api_key.created':  { icon: '🔐', cls: 'audit-icon--success' },
+    'api_key.revoked':  { icon: '✗', cls: 'audit-icon--danger'  },
+};
+
+function _auditLabel(action) {
+    const labels = {
+        'login.success':    'Logged in',
+        'login.failure':    'Failed login attempt',
+        'register.success': 'Account created',
+        'password.changed': 'Password changed',
+        'profile.updated':  'Profile updated',
+        'account.deleted':  'Account deleted',
+        'site.created':     'Site added',
+        'site.deleted':     'Site deleted',
+        'scan.triggered':   'Scan started',
+        'api_key.created':  'API key created',
+        'api_key.revoked':  'API key revoked',
+    };
+    return labels[action] || action.replace(/\./g, ' ');
+}
+
+function _auditMeta(entry) {
+    const parts = [];
+    if (entry.ip_address) parts.push(entry.ip_address);
+    if (entry.extra) {
+        if (entry.extra.name) parts.push(entry.extra.name);
+        else if (entry.extra.url) parts.push(entry.extra.url);
+        else if (entry.extra.email) parts.push(entry.extra.email);
+    }
+    return parts.join(' · ');
+}
+
+function _auditTimeLabel(iso) {
+    const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
+    const now = new Date();
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 60)  return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleDateString();
+}
+
+async function _fetchAuditLogs(offset) {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ limit: _AUDIT_PAGE_SIZE + 1, offset });
+    if (_auditFilter) params.set('action', _auditFilter);
+    const resp = await fetch('/api/audit?' + params, {
+        headers: { Authorization: 'Bearer ' + token },
+    });
+    if (!resp.ok) throw new Error('Failed to load audit log');
+    return resp.json();
+}
+
+function _renderAuditLog(entries) {
+    const list = document.getElementById('audit-list');
+    const empty = document.getElementById('audit-empty');
+    const pagination = document.getElementById('audit-pagination');
+    if (!list) return;
+
+    _auditHasMore = entries.length > _AUDIT_PAGE_SIZE;
+    const page = entries.slice(0, _AUDIT_PAGE_SIZE);
+
+    if (!page.length) {
+        list.hidden = true;
+        if (empty) empty.hidden = false;
+        if (pagination) pagination.hidden = true;
+        return;
+    }
+
+    if (empty) empty.hidden = true;
+    list.innerHTML = page.map(entry => {
+        const { icon, cls } = _AUDIT_ICONS[entry.action] || { icon: '·', cls: '' };
+        const meta = _auditMeta(entry);
+        const time = _auditTimeLabel(entry.created_at);
+        return `<li class="audit-item">
+            <span class="audit-icon ${esc(cls)}" aria-hidden="true">${icon}</span>
+            <span>
+                <div class="audit-action">${esc(_auditLabel(entry.action))}</div>
+                ${meta ? `<div class="audit-meta">${esc(meta)}</div>` : ''}
+            </span>
+            <time class="audit-time" datetime="${esc(entry.created_at)}"
+                  title="${esc(new Date(entry.created_at + (entry.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString())}">
+                ${esc(time)}
+            </time>
+        </li>`;
+    }).join('');
+    list.hidden = false;
+
+    // Update pagination
+    if (pagination) {
+        pagination.hidden = false;
+        const info = document.getElementById('audit-page-info');
+        const prevBtn = document.getElementById('audit-prev');
+        const nextBtn = document.getElementById('audit-next');
+        if (info) info.textContent = `Showing ${_auditOffset + 1}–${_auditOffset + page.length}`;
+        if (prevBtn) prevBtn.disabled = _auditOffset === 0;
+        if (nextBtn) nextBtn.disabled = !_auditHasMore;
+    }
+}
+
+async function loadAuditLog(offset) {
+    const loading = document.getElementById('audit-loading');
+    const list = document.getElementById('audit-list');
+    const empty = document.getElementById('audit-empty');
+    const pagination = document.getElementById('audit-pagination');
+
+    if (loading) { loading.hidden = false; loading.setAttribute('aria-busy', 'true'); }
+    if (list) list.hidden = true;
+    if (empty) empty.hidden = true;
+    if (pagination) pagination.hidden = true;
+
+    try {
+        const entries = await _fetchAuditLogs(offset);
+        _auditOffset = offset;
+        _renderAuditLog(entries);
+    } catch (err) {
+        if (list) { list.hidden = true; }
+        if (empty) { empty.textContent = 'Could not load activity log.'; empty.hidden = false; }
+    } finally {
+        if (loading) { loading.hidden = true; loading.setAttribute('aria-busy', 'false'); }
+    }
+}
+
+function initAuditLog() {
+    loadAuditLog(0);
+
+    document.getElementById('audit-refresh-btn')?.addEventListener('click', () => {
+        loadAuditLog(0);
+    });
+
+    document.getElementById('audit-filter')?.addEventListener('change', (e) => {
+        _auditFilter = e.target.value;
+        loadAuditLog(0);
+    });
+
+    document.getElementById('audit-prev')?.addEventListener('click', () => {
+        if (_auditOffset >= _AUDIT_PAGE_SIZE) loadAuditLog(_auditOffset - _AUDIT_PAGE_SIZE);
+    });
+
+    document.getElementById('audit-next')?.addEventListener('click', () => {
+        if (_auditHasMore) loadAuditLog(_auditOffset + _AUDIT_PAGE_SIZE);
     });
 }

@@ -152,6 +152,41 @@
             </form>
         </section>
 
+        <!-- Activity log section -->
+        <section class="settings-card" aria-labelledby="audit-heading">
+            <h2 id="audit-heading" class="settings-card-title">Activity Log</h2>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px">
+                A record of recent security-relevant actions on your account.
+            </p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+                <select id="audit-filter" class="audit-filter-select"
+                        aria-label="Filter activity by type">
+                    <option value="">All events</option>
+                    <option value="login">Login events</option>
+                    <option value="register">Registration</option>
+                    <option value="password">Password changes</option>
+                    <option value="profile">Profile updates</option>
+                    <option value="site">Site changes</option>
+                    <option value="scan">Scan events</option>
+                    <option value="api_key">API key events</option>
+                </select>
+                <button class="btn btn-outline btn-sm" id="audit-refresh-btn" type="button"
+                        aria-label="Refresh activity log">&#8635; Refresh</button>
+            </div>
+            <div id="audit-log-container" aria-live="polite" aria-label="Activity log entries">
+                <div class="audit-loading" id="audit-loading" aria-busy="true">Loading activity log&hellip;</div>
+                <ul class="audit-list" id="audit-list" hidden></ul>
+                <p class="audit-empty" id="audit-empty" hidden>No activity recorded yet.</p>
+            </div>
+            <div id="audit-pagination" style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap" hidden>
+                <button class="btn btn-outline btn-sm" id="audit-prev" type="button"
+                        aria-label="Previous page" disabled>&#8592; Prev</button>
+                <span id="audit-page-info" style="font-size:0.85rem;color:var(--text-muted)"></span>
+                <button class="btn btn-outline btn-sm" id="audit-next" type="button"
+                        aria-label="Next page">Next &#8594;</button>
+            </div>
+        </section>
+
         <!-- Danger zone -->
         <section class="settings-card settings-danger-zone" aria-labelledby="danger-heading">
             <h2 id="danger-heading" class="settings-card-title settings-danger-title">Danger Zone</h2>
