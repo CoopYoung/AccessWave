@@ -26,6 +26,22 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode({"sub": str(user_id), "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_password_reset_token(user_id: int, hashed_password: str) -> str:
+    """Create a 15-minute password-reset JWT.
+
+    A fingerprint of the current hashed password is embedded so the token is
+    automatically invalidated the moment the password is changed (reset or
+    manual change), preventing token reuse.
+    """
+    fingerprint = hashlib.sha256(hashed_password.encode()).hexdigest()[:16]
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    return jwt.encode(
+        {"sub": str(user_id), "fp": fingerprint, "type": "pwd_reset", "exp": expire},
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+
 async def _resolve_api_key(token: str, db: AsyncSession) -> User:
     """Authenticate via a raw API key (starts with 'aw_')."""
     digest = hashlib.sha256(token.encode()).hexdigest()

@@ -1,12 +1,14 @@
+import hashlib
 import structlog
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import log_action
-from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.auth import create_access_token, create_password_reset_token, get_current_user, hash_password, verify_password
 from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
@@ -66,6 +68,24 @@ class ChangePasswordRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def pw_constraints(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(v) > 128:
+            raise ValueError("Password must not exceed 128 characters")
+        return v
 
 
 @router.post(
@@ -185,3 +205,75 @@ async def delete_account(
     await db.flush()
     await db.delete(user)
     await db.commit()
+
+
+@router.post(
+    "/forgot-password",
+    status_code=200,
+    summary="Request a password-reset email",
+    description=(
+        "Send a one-time password-reset link to the given email address. "
+        "Always returns 200 to prevent email enumeration. "
+        "The link expires after 15 minutes."
+    ),
+)
+@limiter.limit("5/minute")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    # Look up the user — but always return the same response to avoid leaking
+    # whether a given email address is registered.
+    result = await db.execute(select(User).where(User.email == str(body.email).lower()))
+    user = result.scalar_one_or_none()
+    if user and settings.email_enabled:
+        from app.services.email_service import send_password_reset  # local import avoids circular at module level
+        token = create_password_reset_token(user.id, user.hashed_password)
+        reset_url = f"{settings.BASE_URL}/reset-password?token={token}"
+        await send_password_reset(to_address=user.email, reset_url=reset_url)
+        await log_action(db, action="password.reset_requested", user_id=user.id, request=request)
+        await db.commit()
+    logger.info("forgot_password_requested", email=str(body.email))
+    return {"ok": True, "message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post(
+    "/reset-password",
+    status_code=200,
+    summary="Reset password using a token",
+    description="Set a new password using the token from the reset email. The token is single-use.",
+)
+@limiter.limit("10/minute")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    # Decode the JWT without fingerprint check first to get user_id
+    try:
+        payload = jwt.decode(body.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    if payload.get("type") != "pwd_reset":
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    # Validate fingerprint — token is stale if password already changed
+    fingerprint = hashlib.sha256(user.hashed_password.encode()).hexdigest()[:16]
+    if payload.get("fp") != fingerprint:
+        raise HTTPException(status_code=400, detail="This reset link has already been used")
+
+    user.hashed_password = hash_password(body.new_password)
+    await log_action(db, action="password.reset_completed", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("password_reset_completed", user_id=user.id)
+    return {"ok": True, "message": "Password updated. You can now log in."}
