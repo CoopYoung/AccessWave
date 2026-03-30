@@ -231,9 +231,39 @@
                     Two-factor authentication is active. You will be asked for a code from your
                     authenticator app each time you log in.
                 </p>
-                <button class="btn btn-danger btn-sm" id="open-disable-2fa-modal-btn" type="button">
-                    Disable 2FA
-                </button>
+
+                <!-- Recovery codes display (shown once after enabling, or after regenerating) -->
+                <div id="recovery-codes-reveal" hidden
+                     style="background:var(--surface-2,#f1f5f9);border:1px solid var(--border);
+                            border-radius:10px;padding:18px;margin-bottom:18px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                        <strong style="font-size:0.9rem">Recovery Codes</strong>
+                        <button type="button" id="copy-recovery-codes-btn"
+                                class="btn btn-outline btn-sm"
+                                aria-label="Copy all recovery codes to clipboard">Copy all</button>
+                    </div>
+                    <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:12px">
+                        Save these codes somewhere safe. Each code can only be used once to sign in
+                        if you lose access to your authenticator app.
+                    </p>
+                    <ol id="recovery-codes-list" aria-label="Recovery codes"
+                        style="list-style:none;padding:0;margin:0;display:grid;
+                               grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">
+                        <!-- Populated by JS -->
+                    </ol>
+                </div>
+
+                <!-- Remaining codes count -->
+                <p id="recovery-codes-count" style="color:var(--text-muted);font-size:0.875rem;margin-bottom:14px"></p>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn btn-outline btn-sm" id="open-regen-codes-modal-btn" type="button">
+                        Regenerate recovery codes
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="open-disable-2fa-modal-btn" type="button">
+                        Disable 2FA
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -304,6 +334,31 @@
                 <div style="display:flex;gap:10px;margin-top:4px">
                     <button type="submit" class="btn btn-danger btn-sm">Disable 2FA</button>
                     <button type="button" class="btn btn-outline btn-sm" id="close-disable-2fa-modal-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Regenerate recovery codes modal -->
+    <div id="regen-codes-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="regen-codes-modal-title" hidden>
+        <div class="modal">
+            <h3 id="regen-codes-modal-title">Regenerate Recovery Codes</h3>
+            <p style="color:var(--text-muted);margin-bottom:20px;font-size:0.9rem">
+                All existing recovery codes will be invalidated and replaced with a new set of 8.
+                Enter your current authenticator code to confirm.
+            </p>
+            <div id="regen-codes-banner" class="settings-banner" role="alert" aria-live="assertive" hidden></div>
+            <form id="regen-codes-form" novalidate>
+                <div class="form-group" style="max-width:200px;margin-bottom:14px">
+                    <label for="regen-codes-totp">Authenticator code</label>
+                    <input type="text" id="regen-codes-totp" inputmode="numeric"
+                           pattern="[0-9 ]{6,7}" maxlength="7" required autocomplete="one-time-code"
+                           placeholder="000000"
+                           style="letter-spacing:0.2em;font-size:1.1rem;text-align:center">
+                </div>
+                <div style="display:flex;gap:10px;margin-top:4px">
+                    <button type="submit" class="btn btn-primary btn-sm">Regenerate</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="close-regen-codes-modal-btn">Cancel</button>
                 </div>
             </form>
         </div>

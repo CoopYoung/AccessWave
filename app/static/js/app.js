@@ -2172,7 +2172,7 @@ function show2FABanner(msg, isError = false) {
     setTimeout(() => { el.hidden = true; }, 5000);
 }
 
-function set2FAState(enabled) {
+function set2FAState(enabled, recoveryCodesRemaining) {
     const badge = document.getElementById('2fa-status-badge');
     const disabledPanel = document.getElementById('2fa-disabled-panel');
     const enabledPanel = document.getElementById('2fa-enabled-panel');
@@ -2184,12 +2184,43 @@ function set2FAState(enabled) {
     if (disabledPanel) disabledPanel.hidden = enabled;
     if (enabledPanel) enabledPanel.hidden = !enabled;
     if (setupPanel) setupPanel.hidden = true;
+    // Update recovery codes remaining count
+    if (typeof recoveryCodesRemaining === 'number') {
+        const countEl = document.getElementById('recovery-codes-count');
+        if (countEl) {
+            if (recoveryCodesRemaining === 0) {
+                countEl.textContent = 'No recovery codes remaining — regenerate them now.';
+                countEl.style.color = 'var(--red)';
+            } else {
+                countEl.textContent = `${recoveryCodesRemaining} recovery code${recoveryCodesRemaining === 1 ? '' : 's'} remaining.`;
+                countEl.style.color = '';
+            }
+        }
+    }
+}
+
+function showRecoveryCodes(codes) {
+    const reveal = document.getElementById('recovery-codes-reveal');
+    const list = document.getElementById('recovery-codes-list');
+    if (!reveal || !list) return;
+    list.innerHTML = codes.map(c =>
+        `<li><code style="display:block;padding:6px 10px;background:var(--bg);border:1px solid var(--border);
+                        border-radius:6px;font-size:0.85rem;letter-spacing:0.05em;user-select:all">${esc(c)}</code></li>`
+    ).join('');
+    reveal.hidden = false;
+    reveal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Update count display: after showing fresh codes, all 8 are available
+    const countEl = document.getElementById('recovery-codes-count');
+    if (countEl) {
+        countEl.textContent = `${codes.length} recovery codes remaining.`;
+        countEl.style.color = '';
+    }
 }
 
 async function init2FASettings() {
     try {
         const data = await API.req('GET', '/auth/2fa/status');
-        set2FAState(data.totp_enabled);
+        set2FAState(data.totp_enabled, data.recovery_codes_remaining);
     } catch {
         set2FAState(false);
     }
@@ -2239,15 +2270,29 @@ async function init2FASettings() {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Enabling\u2026';
         try {
-            await API.req('POST', '/auth/2fa/enable', { totp_code: code });
-            set2FAState(true);
-            show2FABanner('Two-factor authentication enabled successfully.');
+            const data = await API.req('POST', '/auth/2fa/enable', { totp_code: code });
+            set2FAState(true, data.recovery_codes ? data.recovery_codes.length : 0);
+            showRecoveryCodes(data.recovery_codes || []);
+            show2FABanner('Two-factor authentication enabled. Save your recovery codes below.');
             document.getElementById('2fa-confirm-code').value = '';
         } catch (err) {
             show2FABanner(err.message || 'Invalid code — please try again', true);
         } finally {
             btn.disabled = false;
             btn.innerHTML = origText;
+        }
+    });
+
+    // Copy recovery codes
+    document.getElementById('copy-recovery-codes-btn')?.addEventListener('click', async () => {
+        const items = document.querySelectorAll('#recovery-codes-list code');
+        if (!items.length) return;
+        const text = Array.from(items).map(el => el.textContent.trim()).join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast('Recovery codes copied to clipboard');
+        } catch {
+            showToast('Copy failed — select the codes manually', 'error');
         }
     });
 
@@ -2288,6 +2333,53 @@ async function init2FASettings() {
         } catch (err) {
             if (banner) {
                 banner.textContent = err.message || 'Failed to disable 2FA';
+                banner.className = 'settings-banner settings-banner--error';
+                banner.hidden = false;
+            }
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
+
+    // Regenerate recovery codes modal
+    document.getElementById('open-regen-codes-modal-btn')?.addEventListener('click', () => {
+        const modal = document.getElementById('regen-codes-modal');
+        if (modal) { modal.hidden = false; modal.removeAttribute('hidden'); }
+        document.getElementById('regen-codes-totp')?.focus();
+    });
+
+    const closeRegenCodesModal = () => {
+        const modal = document.getElementById('regen-codes-modal');
+        if (modal) modal.hidden = true;
+        const inp = document.getElementById('regen-codes-totp');
+        if (inp) inp.value = '';
+        const banner = document.getElementById('regen-codes-banner');
+        if (banner) banner.hidden = true;
+    };
+
+    document.getElementById('close-regen-codes-modal-btn')?.addEventListener('click', closeRegenCodesModal);
+    document.getElementById('regen-codes-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('regen-codes-modal')) closeRegenCodesModal();
+    });
+
+    document.getElementById('regen-codes-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = document.getElementById('regen-codes-totp')?.value?.trim();
+        if (!code) return;
+        const btn = e.target.querySelector('button[type=submit]');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Regenerating\u2026';
+        const banner = document.getElementById('regen-codes-banner');
+        try {
+            const data = await API.req('POST', '/auth/2fa/recovery-codes/regenerate', { totp_code: code });
+            closeRegenCodesModal();
+            showRecoveryCodes(data.recovery_codes || []);
+            show2FABanner('Recovery codes regenerated. Save the new codes shown below.');
+        } catch (err) {
+            if (banner) {
+                banner.textContent = err.message || 'Failed to regenerate codes — please try again';
                 banner.className = 'settings-banner settings-banner--error';
                 banner.hidden = false;
             }

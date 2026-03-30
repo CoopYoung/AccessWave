@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 import structlog
 import datetime
 import pyotp
@@ -16,6 +17,25 @@ from app.database import get_db
 from app.limiter import limiter
 from app.metrics import AUTH_ATTEMPTS
 from app.models import User
+
+
+# ── Recovery code helpers ──────────────────────────────────────────────────
+
+_RECOVERY_CODE_COUNT = 8
+
+
+def _generate_recovery_codes() -> tuple[list[str], list[str]]:
+    """Return (plaintext_codes, hashed_codes). Each code is XXXXX-XXXXX."""
+    plain, hashed = [], []
+    for _ in range(_RECOVERY_CODE_COUNT):
+        code = f"{secrets.token_hex(4)}-{secrets.token_hex(4)}"
+        plain.append(code)
+        hashed.append(hashlib.sha256(code.encode()).hexdigest())
+    return plain, hashed
+
+
+def _hash_recovery_code(code: str) -> str:
+    return hashlib.sha256(code.strip().lower().encode()).hexdigest()
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = structlog.get_logger("accesswave.auth")
@@ -69,6 +89,12 @@ class TotpSetupResponse(BaseModel):
 
 class TotpEnableRequest(BaseModel):
     totp_code: str
+
+
+class TotpEnableResponse(BaseModel):
+    ok: bool
+    message: str
+    recovery_codes: list[str]
 
 
 class TotpDisableRequest(BaseModel):
@@ -251,18 +277,32 @@ async def login_totp(
     if not user or not user.totp_enabled or not user.totp_secret:
         raise HTTPException(status_code=401, detail="Invalid or expired pre-auth token")
 
-    totp = pyotp.TOTP(user.totp_secret)
     code = body.totp_code.strip().replace(" ", "")
-    if not totp.verify(code, valid_window=1):
+
+    # Try TOTP first
+    totp = pyotp.TOTP(user.totp_secret)
+    verified_via = None
+    if totp.verify(code, valid_window=1):
+        verified_via = "totp"
+    elif user.totp_recovery_codes:
+        # Try recovery codes (case-insensitive; stored as hex so all lowercase)
+        code_hash = _hash_recovery_code(code)
+        if code_hash in user.totp_recovery_codes:
+            # Consume the code — remove it so it can't be reused
+            remaining = [h for h in user.totp_recovery_codes if h != code_hash]
+            user.totp_recovery_codes = remaining if remaining else None
+            verified_via = "recovery_code"
+
+    if not verified_via:
         AUTH_ATTEMPTS.labels(endpoint="login_totp", outcome="failure").inc()
         await log_action(db, action="login.2fa_failure", user_id=user.id, request=request)
         await db.commit()
         raise HTTPException(status_code=401, detail="Invalid authenticator code")
 
-    logger.info("user_login_2fa", user_id=user.id, email=user.email)
+    logger.info("user_login_2fa", user_id=user.id, email=user.email, method=verified_via)
     AUTH_ATTEMPTS.labels(endpoint="login_totp", outcome="success").inc()
     await log_action(db, action="login.success", user_id=user.id, request=request,
-                     extra={"method": "2fa"})
+                     extra={"method": verified_via})
     await db.commit()
     return TokenResponse(access_token=create_access_token(user.id, user.token_version or 0))
 
@@ -494,7 +534,12 @@ async def setup_2fa(
     "/2fa/enable",
     status_code=200,
     summary="Enable 2FA",
-    description="Verify the user's current TOTP code and activate 2FA on the account.",
+    description=(
+        "Verify the user's current TOTP code and activate 2FA on the account. "
+        "Returns 8 one-time recovery codes that can be used if the authenticator "
+        "app is unavailable. Store them somewhere safe — they are shown only once."
+    ),
+    response_model=TotpEnableResponse,
 )
 async def enable_2fa(
     request: Request,
@@ -510,11 +555,17 @@ async def enable_2fa(
     code = body.totp_code.strip().replace(" ", "")
     if not totp.verify(code, valid_window=1):
         raise HTTPException(status_code=400, detail="Invalid authenticator code — please try again")
+    plain_codes, hashed_codes = _generate_recovery_codes()
     user.totp_enabled = True
+    user.totp_recovery_codes = hashed_codes
     await log_action(db, action="2fa.enabled", user_id=user.id, request=request)
     await db.commit()
     logger.info("2fa_enabled", user_id=user.id)
-    return {"ok": True, "message": "Two-factor authentication is now enabled."}
+    return TotpEnableResponse(
+        ok=True,
+        message="Two-factor authentication is now enabled.",
+        recovery_codes=plain_codes,
+    )
 
 
 @router.delete(
@@ -535,6 +586,7 @@ async def disable_2fa(
         raise HTTPException(status_code=400, detail="Incorrect password")
     user.totp_enabled = False
     user.totp_secret = None
+    user.totp_recovery_codes = None
     await log_action(db, action="2fa.disabled", user_id=user.id, request=request)
     await db.commit()
     logger.info("2fa_disabled", user_id=user.id)
@@ -547,7 +599,43 @@ async def disable_2fa(
     description="Returns whether 2FA is currently enabled for the authenticated user.",
 )
 async def get_2fa_status(user: User = Depends(get_current_user)):
-    return {"totp_enabled": user.totp_enabled}
+    remaining = len(user.totp_recovery_codes) if user.totp_recovery_codes else 0
+    return {"totp_enabled": user.totp_enabled, "recovery_codes_remaining": remaining}
+
+
+@router.post(
+    "/2fa/recovery-codes/regenerate",
+    summary="Regenerate 2FA recovery codes",
+    description=(
+        "Invalidate all existing recovery codes and issue a fresh set of 8. "
+        "Requires the user's current TOTP code as confirmation. "
+        "The new plaintext codes are returned once and never stored in plain form."
+    ),
+    response_model=TotpEnableResponse,
+)
+@limiter.limit("5/hour")
+async def regenerate_recovery_codes(
+    request: Request,
+    body: TotpEnableRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.totp_enabled or not user.totp_secret:
+        raise HTTPException(status_code=400, detail="2FA is not enabled on this account")
+    totp = pyotp.TOTP(user.totp_secret)
+    code = body.totp_code.strip().replace(" ", "")
+    if not totp.verify(code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid authenticator code — please try again")
+    plain_codes, hashed_codes = _generate_recovery_codes()
+    user.totp_recovery_codes = hashed_codes
+    await log_action(db, action="2fa.recovery_codes_regenerated", user_id=user.id, request=request)
+    await db.commit()
+    logger.info("2fa_recovery_codes_regenerated", user_id=user.id)
+    return TotpEnableResponse(
+        ok=True,
+        message="Recovery codes have been regenerated. Store them somewhere safe.",
+        recovery_codes=plain_codes,
+    )
 
 
 @router.post(

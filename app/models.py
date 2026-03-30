@@ -24,6 +24,8 @@ class User(Base):
     # TOTP-based two-factor authentication
     totp_secret = Column(String(64), nullable=True)    # base32 TOTP secret
     totp_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    # 2FA recovery codes — JSON list of SHA-256 hashed one-time codes
+    totp_recovery_codes = Column(JSON, nullable=True)
     # Account lockout after repeated failed logins
     failed_login_attempts = Column(Integer, default=0, nullable=False, server_default="0")
     locked_until = Column(DateTime, nullable=True)
