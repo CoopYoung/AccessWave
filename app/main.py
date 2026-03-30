@@ -18,6 +18,7 @@ from app.database import init_db
 from app.errors import http_exception_handler as _http_exc_handler, unhandled_exception_handler as _unhandled_exc_handler, validation_exception_handler
 from app.limiter import limiter
 from app.logging_config import configure_logging
+from app.request_id import RequestIDMiddleware
 from app.routers import auth_router, audit_router, backup_router, billing_router, health_router, scan_router, api_keys_router, webhooks_router, notifications_router
 from app.scheduler import start_scheduler, stop_scheduler
 from app.security_headers import SecurityHeadersMiddleware
@@ -128,11 +129,16 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 # 3. Security headers — injected into every response on the way out.
 app.add_middleware(SecurityHeadersMiddleware)
+
+# 4. Request ID — assigns a UUID to every request, binds it to structlog
+#    context, and echoes it in the X-Request-ID response header.
+app.add_middleware(RequestIDMiddleware)
 
 # -----------------------------------------------------------------------------
 
