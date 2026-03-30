@@ -1,15 +1,67 @@
 services:
+
+  # ── Web application ──────────────────────────────────────────────────────────
   web:
     build: .
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # SQLite DB stored in the named volume; override with DATABASE_URL in .env
+      # for PostgreSQL: postgresql+asyncpg://accesswave:accesswave@postgres:5432/accesswave
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////app/data/accesswave.db}
     volumes:
       - db-data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
     restart: unless-stopped
 
-  # Optional PostgreSQL service.
+  # ── Redis (broker + result backend for Celery) ───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Celery worker (optional — enable with: docker compose --profile celery up)
+  celery-worker:
+    build: .
+    profiles: ["celery"]
+    command: celery -A app.celery_worker worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////app/data/accesswave.db}
+      USE_CELERY: "true"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - db-data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Optional PostgreSQL ──────────────────────────────────────────────────────
   # Start with: docker compose --profile postgres up
   # Set DATABASE_URL=postgresql+asyncpg://accesswave:accesswave@postgres:5432/accesswave in .env
   postgres:
@@ -32,4 +84,5 @@ services:
 
 volumes:
   db-data:
+  redis-data:
   pg-data:
