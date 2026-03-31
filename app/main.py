@@ -4,7 +4,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -241,3 +241,27 @@ async def api_reference_page(request: Request):
 @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
 async def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
+
+
+# ─── PWA support ──────────────────────────────────────────────────────────────
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Serve the service worker from the root scope so it can control all pages."""
+    return FileResponse(
+        "app/static/sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+@app.get("/site.webmanifest", include_in_schema=False)
+async def web_manifest():
+    return FileResponse("app/static/manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/offline", response_class=HTMLResponse, include_in_schema=False)
+async def offline_page(request: Request):
+    """Shown by the service worker when the user is offline and has no cached page."""
+    return templates.TemplateResponse("offline.html", {"request": request})

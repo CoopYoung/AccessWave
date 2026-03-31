@@ -1,3 +1,34 @@
+// ─── Service Worker Registration ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then((reg) => { reg.update(); })
+            .catch((err) => { console.warn('[SW] Registration failed:', err); });
+    });
+}
+
+// ─── PWA Install Prompt ───────────────────────────────────────────────────────
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) {
+        installBtn.hidden = false;
+        installBtn.addEventListener('click', async () => {
+            installBtn.hidden = true;
+            _deferredInstallPrompt.prompt();
+            await _deferredInstallPrompt.userChoice;
+            _deferredInstallPrompt = null;
+        }, { once: true });
+    }
+});
+window.addEventListener('appinstalled', () => {
+    _deferredInstallPrompt = null;
+    const btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.hidden = true;
+});
+
 // Mobile nav toggle — runs on every page
 document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('.nav-toggle');

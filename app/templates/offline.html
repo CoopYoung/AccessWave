@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-    <title>Page Not Found - AccessWave</title>
-    <meta name="description" content="The page you were looking for could not be found.">
+    <title>You&#39;re Offline - AccessWave</title>
+    <meta name="description" content="It looks like you&#39;re not connected to the internet. Check your connection and try again.">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -16,18 +16,18 @@
     <nav aria-label="Main navigation"><div class="container">
         <a href="/" class="logo">Access<span>Wave</span></a>
         <div class="links">
-            <a href="/login">Log in</a>
-            <a href="/register" class="btn btn-primary btn-sm">Start Free</a>
+            <a href="/dashboard">Dashboard</a>
         </div>
     </div></nav>
 
     <main class="error-page" id="main-content">
         <div class="error-page-inner">
-            <div class="error-code" aria-hidden="true">404</div>
-            <h1>Page not found</h1>
-            <p>The page you&#39;re looking for doesn&#39;t exist or has been moved.<br>Double-check the URL, or use one of the links below to get back on track.</p>
+            <div class="error-code" aria-hidden="true" style="font-size:4rem">&#9888;</div>
+            <h1>You&#39;re offline</h1>
+            <p>It looks like you&#39;re not connected to the internet.<br>
+               Check your connection and try again &mdash; previously visited pages may still be available.</p>
             <div class="error-actions">
-                <a href="/" class="btn btn-primary">Go to Home</a>
+                <button class="btn btn-primary" onclick="window.location.reload()">Try Again</button>
                 <a href="/dashboard" class="btn btn-outline">Go to Dashboard</a>
             </div>
         </div>

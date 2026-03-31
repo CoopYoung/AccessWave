@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <title>Dashboard - AccessWave</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
@@ -25,6 +29,8 @@
             <a href="#" id="logout-btn">Log out</a>
             <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
             <button class="btn btn-outline btn-sm" id="shortcuts-trigger" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">⌨</button>
+            <button class="btn btn-outline btn-sm" id="pwa-install-btn" hidden
+                    aria-label="Install AccessWave app" title="Install app">&#8659; Install</button>
         </div>
     </div></nav>
 
