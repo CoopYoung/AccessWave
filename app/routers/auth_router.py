@@ -14,6 +14,7 @@ from app.audit import log_action
 from app.auth import create_access_token, create_email_verify_token, create_pre_auth_token, create_password_reset_token, get_current_user, hash_password, verify_password
 from app.config import settings
 from app.database import get_db
+from app.ip_blocker import maybe_auto_block, record_ip_failure
 from app.limiter import limiter
 from app.metrics import AUTH_ATTEMPTS
 from app.models import User
@@ -208,6 +209,9 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
         logger.warning("login_failed", email=form.username)
         AUTH_ATTEMPTS.labels(endpoint="login", outcome="failure").inc()
         uid = user.id if user else None
+        # Track per-IP failure count and auto-block if threshold exceeded
+        client_ip = request.client.host if request.client else "unknown"
+        record_ip_failure(client_ip)
         if user:
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
@@ -227,6 +231,9 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
             await log_action(db, action="login.failure", user_id=None, request=request,
                              extra={"email": form.username})
         await db.commit()
+        # Auto-block after commit so the BlockedIP row doesn't conflict with
+        # the audit log write above (both use separate sessions in maybe_auto_block).
+        await maybe_auto_block(client_ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Successful password check — reset lockout counters

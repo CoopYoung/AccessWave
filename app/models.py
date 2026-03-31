@@ -120,6 +120,22 @@ class ApiKey(Base):
     user = relationship("User", back_populates="api_keys")
 
 
+class BlockedIP(Base):
+    """IP addresses blocked from accessing the API.
+
+    ``blocked_by`` is either ``"auto"`` (triggered by the system after too many
+    failed login attempts) or the email of the admin who manually added the block.
+    ``expires_at`` is ``None`` for permanent blocks.
+    """
+    __tablename__ = "blocked_ips"
+    id = Column(Integer, primary_key=True, index=True)
+    ip_address = Column(String(45), unique=True, nullable=False, index=True)
+    reason = Column(String(255), nullable=False)
+    blocked_by = Column(String(255), nullable=False, default="auto")  # "auto" or admin email
+    blocked_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)  # None = permanent
+
+
 class AuditLog(Base):
     """Immutable record of security-relevant user actions."""
     __tablename__ = "audit_logs"

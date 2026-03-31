@@ -18,6 +18,7 @@ from app.database import init_db
 from app.errors import http_exception_handler as _http_exc_handler, unhandled_exception_handler as _unhandled_exc_handler, validation_exception_handler
 from app.limiter import limiter
 from app.logging_config import configure_logging
+from app.ip_blocker import IPBlockMiddleware
 from app.request_id import RequestIDMiddleware
 from app.routers import admin_router, auth_router, audit_router, backup_router, billing_router, health_router, scan_router, api_keys_router, webhooks_router, notifications_router
 from app.scheduler import start_scheduler, stop_scheduler
@@ -139,6 +140,11 @@ app.add_middleware(SecurityHeadersMiddleware)
 # 4. Request ID — assigns a UUID to every request, binds it to structlog
 #    context, and echoes it in the X-Request-ID response header.
 app.add_middleware(RequestIDMiddleware)
+
+# 5. IP blocking — checks the client IP against the blocked_ips table and
+#    returns 403 Forbidden for any blocked address.  Health/metrics paths
+#    are exempt so liveness probes always pass.
+app.add_middleware(IPBlockMiddleware)
 
 # -----------------------------------------------------------------------------
 

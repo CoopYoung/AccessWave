@@ -44,6 +44,12 @@
         #admin-error { color: var(--red, #ef4444); padding: 10px; }
         .table-wrap { overflow-x: auto; }
         .empty-msg { color: var(--text-muted); font-style: italic; padding: 20px 0; text-align: center; }
+        .ip-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+        .ip-form label { font-size: .8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 3px; }
+        .ip-form input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); font-size: .875rem; }
+        .ip-form input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .badge-blocked { background: #f97316; color: #fff; }
+        .badge-auto { background: #64748b; color: #fff; }
     </style>
 </head>
 <body>
@@ -77,6 +83,43 @@
                 <div class="admin-stat"><div class="label">Total Sites</div><div class="value" id="stat-sites">--</div></div>
                 <div class="admin-stat"><div class="label">Total Scans</div><div class="value" id="stat-scans">--</div></div>
                 <div class="admin-stat"><div class="label">Scans Today</div><div class="value" id="stat-today">--</div></div>
+            </div>
+        </section>
+
+        <!-- IP Blocklist -->
+        <section class="admin-section" aria-labelledby="ip-heading">
+            <h2 id="ip-heading">IP Blocklist</h2>
+            <form class="ip-form" id="ip-block-form" aria-label="Block an IP address">
+                <div>
+                    <label for="ip-input">IP Address</label>
+                    <input type="text" id="ip-input" placeholder="e.g. 203.0.113.42" autocomplete="off" required pattern="^[0-9a-fA-F.:]+$">
+                </div>
+                <div>
+                    <label for="ip-reason">Reason</label>
+                    <input type="text" id="ip-reason" placeholder="Reason (optional)" style="min-width:200px;">
+                </div>
+                <div>
+                    <label for="ip-duration">Duration (hours, blank = permanent)</label>
+                    <input type="number" id="ip-duration" placeholder="24" min="1" style="width:80px;">
+                </div>
+                <button type="submit" class="btn btn-sm" style="align-self:flex-end;">Block IP</button>
+            </form>
+            <div class="table-wrap">
+                <table class="user-table" aria-label="Blocked IP list" aria-live="polite" aria-atomic="true">
+                    <thead>
+                        <tr>
+                            <th scope="col">IP Address</th>
+                            <th scope="col">Reason</th>
+                            <th scope="col">Blocked By</th>
+                            <th scope="col">Blocked At</th>
+                            <th scope="col">Expires</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ip-tbody">
+                        <tr><td colspan="6" class="empty-msg">Loading…</td></tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -335,10 +378,84 @@
         if (hasMore) { currentPage++; loadUsers(); }
     });
 
+    // -------------------------------------------------------------------------
+    // IP Blocklist
+    // -------------------------------------------------------------------------
+    async function loadBlockedIPs() {
+        const tbody = document.getElementById('ip-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Loading…</td></tr>';
+        try {
+            const res = await fetch('/api/admin/blocked-ips', { headers: API.headers() });
+            if (!res.ok) throw new Error(await res.text());
+            const blocks = await res.json();
+            if (blocks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No blocked IPs.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = blocks.map(b => {
+                const byBadge = b.blocked_by === 'auto'
+                    ? '<span class="badge badge-auto">auto</span>'
+                    : `<span class="badge badge-admin">${escapeHtml(b.blocked_by)}</span>`;
+                const expires = b.expires_at ? formatDate(b.expires_at) : '<span class="badge badge-blocked">permanent</span>';
+                return `<tr>
+                    <td><code>${escapeHtml(b.ip_address)}</code></td>
+                    <td>${escapeHtml(b.reason)}</td>
+                    <td>${byBadge}</td>
+                    <td>${formatDate(b.blocked_at)}</td>
+                    <td>${expires}</td>
+                    <td><button class="action-btn action-unban" data-ip="${escapeHtml(b.ip_address)}" aria-label="Unblock ${escapeHtml(b.ip_address)}">Unblock</button></td>
+                </tr>`;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Error loading blocked IPs.</td></tr>';
+        }
+    }
+
+    document.getElementById('ip-tbody').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-ip]');
+        if (!btn) return;
+        const ip = btn.dataset.ip;
+        if (!confirm(`Unblock IP ${ip}?`)) return;
+        try {
+            const res = await fetch(`/api/admin/blocked-ips/${encodeURIComponent(ip)}`, { method: 'DELETE', headers: API.headers() });
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+            await loadBlockedIPs();
+        } catch (err) {
+            showError('Unblock failed: ' + err.message);
+        }
+    });
+
+    document.getElementById('ip-block-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const ip = document.getElementById('ip-input').value.trim();
+        const reason = document.getElementById('ip-reason').value.trim() || 'Manually blocked by admin';
+        const durationRaw = document.getElementById('ip-duration').value.trim();
+        const duration_hours = durationRaw ? parseInt(durationRaw, 10) : null;
+
+        try {
+            const body = { ip_address: ip, reason };
+            if (duration_hours) body.duration_hours = duration_hours;
+            const res = await fetch('/api/admin/blocked-ips', {
+                method: 'POST',
+                headers: API.headers(),
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to block IP');
+            document.getElementById('ip-input').value = '';
+            document.getElementById('ip-reason').value = '';
+            document.getElementById('ip-duration').value = '';
+            await loadBlockedIPs();
+        } catch (err) {
+            showError('Could not block IP: ' + err.message);
+        }
+    });
+
     // Bootstrap
     (async () => {
         if (!API.token) { window.location.href = '/login'; return; }
         await loadStats();
+        await loadBlockedIPs();
         await loadUsers();
     })();
     </script>

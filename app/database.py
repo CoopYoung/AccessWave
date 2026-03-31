@@ -24,6 +24,9 @@ def _engine_kwargs() -> dict:
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False, **_engine_kwargs())
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# Alias used by modules that need a session outside of a request context
+# (e.g. the IP blocker middleware and background tasks).
+AsyncSessionLocal = async_session
 
 
 class Base(DeclarativeBase):

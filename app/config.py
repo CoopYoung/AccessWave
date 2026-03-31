@@ -81,6 +81,16 @@ class Settings:
     MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOCKOUT_MINUTES: int = int(os.getenv("LOCKOUT_MINUTES", "15"))
 
+    # Automated IP blocking — triggered when an IP fails login too many times
+    # within a rolling window.  Set IP_AUTO_BLOCK_ENABLED=false to disable.
+    IP_AUTO_BLOCK_ENABLED: bool = os.getenv("IP_AUTO_BLOCK_ENABLED", "true").lower() == "true"
+    # Number of failed login attempts from a single IP before auto-blocking
+    IP_BLOCK_THRESHOLD: int = int(os.getenv("IP_BLOCK_THRESHOLD", "20"))
+    # How long (hours) the rolling window is tracked.  Counts reset after this.
+    IP_BLOCK_WINDOW_HOURS: int = int(os.getenv("IP_BLOCK_WINDOW_HOURS", "1"))
+    # How long (hours) an auto-block lasts.  0 = permanent.
+    IP_BLOCK_DURATION_HOURS: int = int(os.getenv("IP_BLOCK_DURATION_HOURS", "24"))
+
     # Data retention — set to 0 to keep data indefinitely
     DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "90"))
     AUDIT_LOG_RETENTION_DAYS: int = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "365"))

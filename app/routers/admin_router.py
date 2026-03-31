@@ -11,19 +11,23 @@ GET  /api/admin/users          — paginated + searchable user list
 POST /api/admin/users/{id}/ban   — ban a user (prevents login/API access)
 POST /api/admin/users/{id}/unban — lift a ban
 POST /api/admin/users/{id}/toggle-admin — promote or demote admin status
+GET  /api/admin/blocked-ips    — list active IP blocks
+POST /api/admin/blocked-ips    — manually block an IP
+DELETE /api/admin/blocked-ips/{ip} — unblock an IP
 """
 import datetime
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_admin_user
 from app.database import get_db
-from app.models import Scan, Site, User
+from app.ip_blocker import _invalidate_cache
+from app.models import BlockedIP, Scan, Site, User
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = structlog.get_logger("accesswave.admin")
@@ -219,3 +223,122 @@ async def toggle_admin(
     action = "promoted" if target.is_admin else "demoted"
     logger.info("admin.user_toggle_admin", admin_id=admin.id, target_user_id=user_id, is_admin=target.is_admin)
     return {"ok": True, "message": f"User {target.email} has been {action}"}
+
+
+# ---------------------------------------------------------------------------
+# IP Blocklist management
+# ---------------------------------------------------------------------------
+
+class BlockedIPSchema(BaseModel):
+    ip_address: str
+    reason: str
+    blocked_by: str
+    blocked_at: datetime.datetime
+    expires_at: Optional[datetime.datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class BlockIPRequest(BaseModel):
+    ip_address: str
+    reason: str = "Manually blocked by admin"
+    duration_hours: Optional[int] = None  # None = permanent
+
+    @field_validator("ip_address")
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        import ipaddress
+        try:
+            ipaddress.ip_address(v)
+        except ValueError:
+            raise ValueError("Invalid IP address")
+        return v
+
+
+@router.get(
+    "/blocked-ips",
+    response_model=list[BlockedIPSchema],
+    summary="List blocked IPs",
+    description="Returns all currently active IP blocks (expired blocks are excluded). Admin only.",
+)
+async def list_blocked_ips(
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.datetime.utcnow()
+    # Exclude expired blocks from the response
+    result = await db.execute(
+        select(BlockedIP)
+        .where(
+            (BlockedIP.expires_at.is_(None)) | (BlockedIP.expires_at > now)
+        )
+        .order_by(BlockedIP.blocked_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/blocked-ips",
+    response_model=BlockedIPSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Block an IP",
+    description="Manually block an IP address. Existing blocks are refreshed. Admin only.",
+)
+async def block_ip(
+    body: BlockIPRequest,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.datetime.utcnow()
+    expires_at = (
+        now + datetime.timedelta(hours=body.duration_hours)
+        if body.duration_hours
+        else None
+    )
+    existing = (
+        await db.execute(select(BlockedIP).where(BlockedIP.ip_address == body.ip_address))
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.reason = body.reason
+        existing.blocked_by = admin.email
+        existing.blocked_at = now
+        existing.expires_at = expires_at
+        block = existing
+    else:
+        block = BlockedIP(
+            ip_address=body.ip_address,
+            reason=body.reason,
+            blocked_by=admin.email,
+            blocked_at=now,
+            expires_at=expires_at,
+        )
+        db.add(block)
+
+    await db.commit()
+    await db.refresh(block)
+    _invalidate_cache()
+    logger.info("admin.ip_blocked", admin_id=admin.id, ip=body.ip_address)
+    return block
+
+
+@router.delete(
+    "/blocked-ips/{ip_address:path}",
+    summary="Unblock an IP",
+    description="Remove the block for the given IP address. Admin only.",
+)
+async def unblock_ip(
+    ip_address: str,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(BlockedIP).where(BlockedIP.ip_address == ip_address))
+    block = result.scalar_one_or_none()
+    if block is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP block not found")
+    await db.delete(block)
+    await db.commit()
+    _invalidate_cache()
+    logger.info("admin.ip_unblocked", admin_id=admin.id, ip=ip_address)
+    return {"ok": True, "message": f"IP {ip_address} has been unblocked"}
